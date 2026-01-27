@@ -1180,7 +1180,7 @@ export type CreateUserPayload = {
     nome: string;
     email: string;
     senha: string;
-    cpf?: string;
+    cpf: string;
     matricula?: string;
 };
 

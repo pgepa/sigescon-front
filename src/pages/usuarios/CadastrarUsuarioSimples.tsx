@@ -100,7 +100,7 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
                 nome: data.nome,
                 email: data.email,
                 senha: data.senha,
-                ...(data.cpf ? { cpf: data.cpf.replace(/\D/g, '') } : {}),
+                cpf: data.cpf ? data.cpf.replace(/\D/g, '') : '',
                 matricula: data.matricula || '',
             };
 
