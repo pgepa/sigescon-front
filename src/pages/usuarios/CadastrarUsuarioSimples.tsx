@@ -68,10 +68,10 @@ const signUpForm = z.object({
     cpf: z
         .string()
         .transform((val) => val.replace(/\D/g, ''))
-        .refine((val) => val.length === 11, {
+        .refine((val) => val.length === 0 || val.length === 11, {
             message: "CPF deve conter 11 números"
         })
-        .refine((val) => validateCPF(val), {
+        .refine((val) => val.length === 0 || validateCPF(val), {
             message: "CPF inválido"
         }),
     matricula: z.string().optional(),
@@ -100,7 +100,7 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
                 nome: data.nome,
                 email: data.email,
                 senha: data.senha,
-                cpf: data.cpf.replace(/\D/g, ''),
+                ...(data.cpf ? { cpf: data.cpf.replace(/\D/g, '') } : {}),
                 matricula: data.matricula || '',
             };
 
@@ -190,7 +190,7 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <Label htmlFor="cpf">CPF *</Label>
+                                        <Label htmlFor="cpf">CPF</Label>
                                         <Controller
                                             name="cpf"
                                             control={control}
@@ -206,7 +206,7 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
                                                         }
                                                     }}
                                                     maxLength={14}
-                                                    placeholder="000.000.000-00"
+                                                    placeholder="Opcional"
                                                 />
                                             )}
                                         />

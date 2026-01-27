@@ -1167,7 +1167,7 @@ export function revokeProfilesFromUser(usuarioId: number, request: UsuarioPerfil
  * Cria um usuário básico sem perfil (para posterior concessão de perfis)
  * POST /usuarios
  */
-export function createUserWithoutProfile(userData: Omit<NewUserPayload, 'perfil_id'>): Promise<User> {
+export function createUserWithoutProfile(userData: CreateUserPayload): Promise<User> {
     return api<User>('/usuarios', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1180,7 +1180,7 @@ export type CreateUserPayload = {
     nome: string;
     email: string;
     senha: string;
-    cpf: string;
+    cpf?: string;
     matricula?: string;
 };
 
