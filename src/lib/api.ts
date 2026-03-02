@@ -182,7 +182,7 @@ export type ContratadoApiResponse = {
 
 export type NewContratadoPayload = {
     nome: string;
-    email: string;
+    email?: string | null;
     cpf?: string | null;
     cnpj?: string | null;
     telefone?: string | null;

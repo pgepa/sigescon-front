@@ -77,7 +77,7 @@ function validateCNPJ(cnpj: string): boolean {
 // Schema Zod para o formulário
 const contratadoSchema = z.object({
     nome: z.string().min(1, "Nome é obrigatório"),
-    email: z.string().email("E-mail inválido"),
+    email: z.string().email("E-mail inválido").optional().or(z.literal("")),
     telefone: z.string().optional(),
     cpf: z.string().transform(v => v.replace(/\D/g, '')).optional().refine(v => !v || v.length === 11, "CPF deve ter 11 números").refine(v => !v || validateCPF(v), "CPF inválido"),
     cnpj: z.string().transform(v => v.replace(/\D/g, '')).optional().refine(v => !v || v.length === 14, "CNPJ deve ter 14 números").refine(v => !v || validateCNPJ(v), "CNPJ inválido"),
@@ -222,6 +222,7 @@ function NovoContratado({ onContratadoAdded }: { onContratadoAdded: () => void }
         try {
             const payload: NewContratadoPayload = {
                 ...data,
+                email: data.email || null,
                 cpf: data.cpf ? data.cpf.replace(/\D/g, '') : null,
                 cnpj: data.cnpj ? data.cnpj.replace(/\D/g, '') : null,
                 telefone: data.telefone ? data.telefone.replace(/\D/g, '') : null,
@@ -259,7 +260,7 @@ function NovoContratado({ onContratadoAdded }: { onContratadoAdded: () => void }
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="email" className="text-right">E-mail</Label>
-                            <div className="col-span-3"><Input id="email" {...register('email')} />{errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}</div>
+                            <div className="col-span-3"><Input id="email" placeholder="Opcional" {...register('email')} />{errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}</div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="cpf" className="text-right">CPF</Label>

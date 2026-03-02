@@ -395,8 +395,8 @@ export function NovoContrato() {
 
     // Função para criar novo usuário
     const handleSubmitNewUser = async () => {
-        if (!newUserData.nome || !newUserData.email || !newUserData.cpf || !newUserData.senha) {
-            toast.error("Preencha todos os campos obrigatórios (Nome, E-mail, CPF e Senha)");
+        if (!newUserData.nome || !newUserData.email || !newUserData.senha) {
+            toast.error("Preencha todos os campos obrigatórios (Nome, E-mail e Senha)");
             return;
         }
 
@@ -405,11 +405,13 @@ export function NovoContrato() {
             return;
         }
 
-        // Validar CPF limpo
-        const cpfLimpo = cleanCPF(newUserData.cpf);
-        if (cpfLimpo.length !== 11) {
-            toast.error("CPF deve ter exatamente 11 dígitos");
-            return;
+        // Validar CPF se preenchido
+        if (newUserData.cpf) {
+            const cpfLimpo = cleanCPF(newUserData.cpf);
+            if (cpfLimpo.length !== 11) {
+                toast.error("CPF deve ter exatamente 11 dígitos");
+                return;
+            }
         }
 
         // Validar matrícula se preenchida
@@ -437,17 +439,25 @@ export function NovoContrato() {
             };
 
             // Criar usuário com o primeiro perfil como principal
+            const userPayload: Record<string, unknown> = {
+                nome: newUserData.nome,
+                email: newUserData.email,
+                senha: newUserData.senha,
+                perfil_id: selectedPerfis[0],
+            };
+
+            if (newUserData.cpf) {
+                userPayload.cpf = cleanCPF(newUserData.cpf);
+            }
+
+            if (newUserData.matricula) {
+                userPayload.matricula = newUserData.matricula;
+            }
+
             const createUserResponse = await fetch(`${import.meta.env.VITE_API_URL}/usuarios`, {
                 method: 'POST',
                 headers,
-                body: JSON.stringify({
-                    nome: newUserData.nome,
-                    email: newUserData.email,
-                    cpf: cpfLimpo, // Usar CPF sem formatação
-                    matricula: newUserData.matricula || undefined,
-                    senha: newUserData.senha,
-                    perfil_id: selectedPerfis[0] // Usar o primeiro perfil selecionado como perfil principal
-                })
+                body: JSON.stringify(userPayload)
             });
 
             if (!createUserResponse.ok) {
@@ -535,8 +545,8 @@ export function NovoContrato() {
 
     // Função para criar novo contratado
     const handleSubmitNewContratado = async () => {
-        if (!newContratadoData.nome || !newContratadoData.email) {
-            toast.error("Preencha pelo menos o Nome e E-mail do contratado");
+        if (!newContratadoData.nome) {
+            toast.error("Preencha o Nome do contratado");
             return;
         }
 
@@ -585,8 +595,11 @@ export function NovoContrato() {
             // Preparar payload
             const payload: any = {
                 nome: newContratadoData.nome,
-                email: newContratadoData.email,
             };
+
+            if (newContratadoData.email) {
+                payload.email = newContratadoData.email;
+            }
 
             if (newContratadoData.cpf) {
                 payload.cpf = cleanCPF(newContratadoData.cpf);
@@ -1254,13 +1267,13 @@ export function NovoContrato() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">CPF *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">CPF</label>
                                 <input
                                     type="text"
                                     value={newUserData.cpf}
                                     onChange={(e) => setNewUserData(prev => ({ ...prev, cpf: e.target.value }))}
                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                                    placeholder="000.000.000-00 ou apenas números"
+                                    placeholder="000.000.000-00 ou apenas números (opcional)"
                                     maxLength={14}
                                 />
                                 <p className="text-xs text-gray-500 mt-1">Pode usar com ou sem formatação (pontos e hífen)</p>
@@ -1377,13 +1390,13 @@ export function NovoContrato() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail *</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
                                 <input
                                     type="email"
                                     value={newContratadoData.email}
                                     onChange={(e) => setNewContratadoData(prev => ({ ...prev, email: e.target.value }))}
                                     className="w-full px-3 py-2 border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                                    placeholder="email@exemplo.com"
+                                    placeholder="email@exemplo.com (opcional)"
                                 />
                             </div>
 
