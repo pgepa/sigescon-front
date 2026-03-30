@@ -71,9 +71,11 @@ interface SearchableSelectProps {
     onCreateNew?: () => void;
     createNewLabel?: string;
     maxHeight?: string;
+    /** Texto após o contagem, ex.: "10 de 10 termos" */
+    itemNounPlural?: string;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80" }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", itemNounPlural = "usuários" }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
@@ -157,8 +159,8 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                         </div>
                         {options.length > 0 && (
                             <div className="mt-2 text-xs text-blue-600 flex items-center justify-between">
-                                <span>{filteredOptions.length} de {options.length} usuários</span>
-                                {options.length >= 100 && (
+                                <span>{filteredOptions.length} de {options.length} {itemNounPlural}</span>
+                                {options.length >= 100 && itemNounPlural === "usuários" && (
                                     <span className="text-amber-600">⚠ Lista limitada a 100 usuários</span>
                                 )}
                             </div>
@@ -270,6 +272,8 @@ export function NovoContrato() {
     const [selectedFiscalSubstituto, setSelectedFiscalSubstituto] = useState("");
     const [selectedModalidade, setSelectedModalidade] = useState("");
     const [selectedStatus, setSelectedStatus] = useState("");
+    const [termosContratuaisCatalog, setTermosContratuaisCatalog] = useState<Array<{ id: number; nome: string }>>([]);
+    const [selectedTermoContratual, setSelectedTermoContratual] = useState("");
 
     const {
         register,
@@ -285,7 +289,7 @@ export function NovoContrato() {
     useEffect(() => {
         async function fetchData() {
             try {
-                const [contratadosResponse, modalidadesResponse, statusResponse, usuariosResponse, perfisResponse] = await Promise.all([
+                const [contratadosResponse, modalidadesResponse, statusResponse, usuariosResponse, perfisResponse, termosContratuaisResponse] = await Promise.all([
                     fetch(`${import.meta.env.VITE_API_URL}/contratados?page=1&per_page=100`, {
                         method: 'GET',
                         headers: {
@@ -325,15 +329,24 @@ export function NovoContrato() {
                             'Accept': 'application/json',
                             'Content-Type': 'application/json'
                         }
+                    }),
+                    fetch(`${import.meta.env.VITE_API_URL}/termo-contratual`, {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        }
                     })
                 ]);
 
-                const [contratadosData, modalidadesData, statusData, , perfisData] = await Promise.all([
+                const [contratadosData, modalidadesData, statusData, , perfisData, termosContratuaisData] = await Promise.all([
                     contratadosResponse.json(),
                     modalidadesResponse.json(),
                     statusResponse.json(),
                     usuariosResponse.json(),
-                    perfisResponse.json()
+                    perfisResponse.json(),
+                    termosContratuaisResponse.json()
                 ]);
 
                 // Filtrar apenas itens ativos
@@ -341,11 +354,13 @@ export function NovoContrato() {
                 const modalidadesArray = Array.isArray(modalidadesData) ? modalidadesData : modalidadesData.data || [];
                 const statusArray = Array.isArray(statusData) ? statusData : statusData.data || [];
                 const perfisArray = Array.isArray(perfisData) ? perfisData : perfisData.data || [];
+                const termosArrayRaw = Array.isArray(termosContratuaisData) ? termosContratuaisData : termosContratuaisData?.data || [];
 
                 setContratados(contratadosArray.filter((item: any) => item.ativo !== false));
                 setModalidades(modalidadesArray.filter((item: any) => item.ativo !== false));
                 setStatusList(statusArray.filter((item: any) => item.ativo !== false));
                 setPerfis(perfisArray);
+                setTermosContratuaisCatalog(termosArrayRaw.map((t: { id: number; nome: string }) => ({ id: t.id, nome: t.nome })));
 
                 // Carregar usuários filtrados por perfil com limite maior
                 const [usuariosGestoresResponse, usuariosFiscaisResponse] = await Promise.all([
@@ -1126,11 +1141,20 @@ export function NovoContrato() {
                 </div>
                 <div className="lg:col-span-4">
                     <label className="font-medium">Termos Contratuais</label>
-                    <textarea 
-                        {...register("termos_contratuais")} 
-                        className="mt-1 border rounded-lg p-2 w-full h-20" 
-                        placeholder="Descreva os termos contratuais..."
-                    />
+                    <div className="mt-1">
+                        <SearchableSelect
+                            options={termosContratuaisCatalog}
+                            value={selectedTermoContratual}
+                            onValueChange={(value) => {
+                                setSelectedTermoContratual(value);
+                                const nome = termosContratuaisCatalog.find((t) => String(t.id) === value)?.nome ?? "";
+                                setValue("termos_contratuais", nome);
+                            }}
+                            placeholder="Selecione o tipo de termo contratual"
+                            itemNounPlural="termos"
+                        />
+                    </div>
+                    <input type="hidden" {...register("termos_contratuais")} />
                 </div>
 
                 {/* Interface de upload para múltiplos arquivos */}

@@ -892,6 +892,19 @@ export function getModalidades(): Promise<Modalidade[]> {
     return api<Modalidade[]>('/modalidades');
 }
 
+export type TermoContratual = {
+    id: number;
+    nome: string;
+};
+
+/**
+ * Catálogo de tipos de termos contratuais (tabela termo_contratual).
+ * GET /termo-contratual
+ */
+export function getTermosContratuais(): Promise<TermoContratual[]> {
+    return api<TermoContratual[]>('/termo-contratual');
+}
+
 /**
  * Cria uma nova modalidade.
  * POST /modalidades

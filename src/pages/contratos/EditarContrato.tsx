@@ -31,7 +31,8 @@ import {
     deleteArquivoContrato,
     getContratados,
     getModalidades,
-    getStatus
+    getStatus,
+    getTermosContratuais,
 } from '@/lib/api';
 
 // Schema de validação (inalterado)
@@ -218,6 +219,8 @@ export function EditarContrato() {
     const [selectedFiscalSubstituto, setSelectedFiscalSubstituto] = useState("");
     const [selectedModalidade, setSelectedModalidade] = useState("");
     const [selectedStatus, setSelectedStatus] = useState("");
+    const [termosContratuaisCatalog, setTermosContratuaisCatalog] = useState<Array<{ id: number; nome: string }>>([]);
+    const [selectedTermoContratual, setSelectedTermoContratual] = useState("");
 
     const {
         register,
@@ -234,16 +237,18 @@ export function EditarContrato() {
             setIsLoading(true);
             try {
                 // Carrega dados dos dropdowns e contrato em paralelo usando as funções da API
-                const [contratados, modalidades, statusList, contractData] = await Promise.all([
+                const [contratados, modalidades, statusList, termosCatalog, contractData] = await Promise.all([
                     getContratados({ page: 1, per_page: 100 }),
                     getModalidades(),
                     getStatus(),
+                    getTermosContratuais(),
                     getContratoDetalhado(Number(id))
                 ]);
 
                 setContratados(contratados.data || contratados);
                 setModalidades(modalidades);
                 setStatusList(statusList);
+                setTermosContratuaisCatalog(termosCatalog.map((t) => ({ id: t.id, nome: t.nome })));
 
                 // Carregar usuários filtrados por perfil com limite maior
                 const [usuariosGestoresResponse, usuariosFiscaisResponse] = await Promise.all([
@@ -308,6 +313,11 @@ export function EditarContrato() {
                 setSelectedFiscalSubstituto(contractData.fiscal_substituto_id != null ? String(contractData.fiscal_substituto_id) : "");
                 setSelectedModalidade(String(contractData.modalidade_id ?? ""));
                 setSelectedStatus(String(contractData.status_id ?? ""));
+                {
+                    const tcNome = (contractData as any)?.termos_contratuais ?? "";
+                    const tcMatch = termosCatalog.find((t) => t.nome === tcNome);
+                    setSelectedTermoContratual(tcMatch ? String(tcMatch.id) : "");
+                }
 
                 // Carrega arquivos do contrato
                 const filesResponse = await getArquivosByContratoId(Number(id));
@@ -418,6 +428,11 @@ export function EditarContrato() {
                 setSelectedFiscalSubstituto(refreshed.fiscal_substituto_id != null ? String(refreshed.fiscal_substituto_id) : "");
                 setSelectedModalidade(String(refreshed.modalidade_id ?? ""));
                 setSelectedStatus(String(refreshed.status_id ?? ""));
+                {
+                    const tcNome = (refreshed as any)?.termos_contratuais ?? "";
+                    const tcMatch = termosContratuaisCatalog.find((t) => t.nome === tcNome);
+                    setSelectedTermoContratual(tcMatch ? String(tcMatch.id) : "");
+                }
 
                 const updatedFilesResponse = await getArquivosByContratoId(Number(id));
                 setExistingFiles(updatedFilesResponse.arquivos.map(arquivo => ({
@@ -722,7 +737,19 @@ export function EditarContrato() {
                 </div>
                 <div className="lg:col-span-4">
                     <label className="font-medium">Termos Contratuais</label>
-                    <textarea {...register("termos_contratuais")} className="mt-1 border rounded-lg p-2 w-full h-20" />
+                    <div className="mt-1">
+                        <SearchableSelect
+                            options={termosContratuaisCatalog}
+                            value={selectedTermoContratual}
+                            onValueChange={(value) => {
+                                setSelectedTermoContratual(value);
+                                const nome = termosContratuaisCatalog.find((t) => String(t.id) === value)?.nome ?? "";
+                                setValue("termos_contratuais", nome, { shouldDirty: true });
+                            }}
+                            placeholder="Selecione o tipo de termo contratual"
+                        />
+                    </div>
+                    <input type="hidden" {...register("termos_contratuais")} />
                 </div>
 
                 {/* --- GERENCIAMENTO DE ARQUIVOS (atualizado) --- */}
