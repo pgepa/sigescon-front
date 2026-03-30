@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Save, SquareX, Upload, Trash2, ChevronDown, Search, X, UserPlus } from "lucide-react";
@@ -53,6 +53,13 @@ const ALLOWED_FILE_TYPES = [
 const ACCEPT_STRING = ALLOWED_FILE_TYPES.join(',');
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 10MB por arquivo
 const MAX_TOTAL_SIZE = 250 * 1024 * 1024; // 50MB total
+
+/** PAE: 4 dígitos, barra, 6 dígitos (ex.: 1234/123456) */
+function formatPaeInput(raw: string): string {
+    const digits = raw.replace(/\D/g, "").slice(0, 10);
+    if (digits.length <= 4) return digits;
+    return `${digits.slice(0, 4)}/${digits.slice(4)}`;
+}
 
 // Componente SearchableSelect
 interface SearchableSelectProps {
@@ -268,6 +275,7 @@ export function NovoContrato() {
         register,
         handleSubmit,
         setValue,
+        control,
         formState: { errors },
     } = useForm<ContractFormData>({
         resolver: zodResolver(contractSchema),
@@ -885,11 +893,23 @@ export function NovoContrato() {
                 {/* Número do PAE */}
                 <div className="col-span-1">
                     <label className="font-medium">PAE</label>
-                    <input 
-                        type="text" 
-                        placeholder="Ex: PAE nº 2025/123456" 
-                        {...register("pae")} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                    <Controller
+                        name="pae"
+                        control={control}
+                        render={({ field }) => (
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="off"
+                                placeholder="0000/000000"
+                                className="mt-1 border rounded-lg p-2 w-full"
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(formatPaeInput(e.target.value))}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                            />
+                        )}
                     />
                 </div>
 
