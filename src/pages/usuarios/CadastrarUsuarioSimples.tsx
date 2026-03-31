@@ -62,7 +62,7 @@ const cpfMask = (value: string) => {
 
 // Schema simplificado sem perfis
 const signUpForm = z.object({
-    nome: z.string().min(1, "Nome é obrigatório"),
+    nome: z.string().min(1, "Nome é obrigatório").transform((val) => val.trim().toUpperCase()),
     email: z.string().email("E-mail inválido"),
     senha: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
     cpf: z
@@ -97,7 +97,7 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
 
             // Criar usuário básico sem perfil (conforme API)
             const usuarioPayload: CreateUserPayload = {
-                nome: data.nome,
+                nome: data.nome.trim().toUpperCase(),
                 email: data.email,
                 senha: data.senha,
                 cpf: data.cpf ? data.cpf.replace(/\D/g, '') : '',
@@ -178,7 +178,14 @@ export function CadastrarUsuarioSimples({ onUsuarioCriado }: CadastrarUsuarioSim
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label htmlFor="nome">Nome *</Label>
-                                        <Input id="nome" {...register('nome')} />
+                                        <Input
+                                            id="nome"
+                                            {...register('nome', {
+                                                onChange: (e) => {
+                                                    e.target.value = e.target.value.toUpperCase();
+                                                },
+                                            })}
+                                        />
                                         {errors.nome && <p className="text-red-500 text-sm mt-1">{errors.nome.message}</p>}
                                     </div>
                                     <div>

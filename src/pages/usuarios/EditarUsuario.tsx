@@ -48,7 +48,7 @@ const cpfMask = (value: string = '') =>
         .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
 
 const editUserFormSchema = z.object({
-    nome: z.string().min(1, "O nome não pode ficar em branco").optional(),
+    nome: z.string().min(1, "O nome não pode ficar em branco").transform((val) => val.trim().toUpperCase()).optional(),
     email: z.string().email("Formato de e-mail inválido").optional(),
     perfil_id: z.string().optional(),
     senha: z.union([
@@ -124,7 +124,7 @@ export function UserEditar({ user, onUserUpdated }: UserEditarProps) {
         const changedFields: EditUserPayload = {};
 
         // Compara os dados do formulário com os originais para enviar apenas o que mudou.
-        if (data.nome !== undefined && data.nome !== originalUserData.nome) changedFields.nome = data.nome;
+        if (data.nome !== undefined && data.nome !== originalUserData.nome) changedFields.nome = data.nome.trim().toUpperCase();
         if (data.email !== undefined && data.email !== originalUserData.email) changedFields.email = data.email;
         if (data.cpf !== undefined && data.cpf !== originalUserData.cpf) changedFields.cpf = data.cpf;
         if (data.matricula !== undefined && data.matricula !== (originalUserData.matricula ?? "")) changedFields.matricula = data.matricula;
@@ -172,7 +172,14 @@ export function UserEditar({ user, onUserUpdated }: UserEditarProps) {
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="nome" className="text-right">Nome</Label>
                             <div className="col-span-3">
-                                <Input id="nome" {...register('nome')} />
+                                <Input
+                                    id="nome"
+                                    {...register('nome', {
+                                        onChange: (e) => {
+                                            e.target.value = e.target.value.toUpperCase();
+                                        },
+                                    })}
+                                />
                                 {errors.nome && <p className="text-red-500 text-sm mt-1">{errors.nome.message}</p>}
                             </div>
                         </div>
