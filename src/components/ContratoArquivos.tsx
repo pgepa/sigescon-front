@@ -12,6 +12,7 @@ import {
   IconUser,
   IconAlertTriangle,
 } from "@tabler/icons-react";
+import { ClipboardList } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,12 +41,25 @@ import {
   deleteArquivoContrato,
   getRelatoriosAprovadosByContratoId,
   getModeloRelatorioInfo,
-  downloadModeloRelatorio,
   type ModeloRelatorioInfo
 } from "@/lib/api";
+import { FormularioFiscalizacaoModal } from "@/components/FormularioFiscalizacaoModal";
+
+interface ContratoInfo {
+  nr_contrato?: string;
+  pae?: string;
+  contratado_nome?: string;
+  contratado_cnpj?: string;
+  objeto?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  valor_global?: number | null;
+  fiscal_nome?: string;
+}
 
 interface ContratoArquivosProps {
   contratoId: number;
+  contrato?: ContratoInfo;
   className?: string;
 }
 
@@ -59,7 +73,7 @@ type ArquivoContrato = {
   categoria: 'contratual' | 'relatorio';
 };
 
-export function ContratoArquivos({ contratoId, className }: ContratoArquivosProps) {
+export function ContratoArquivos({ contratoId, contrato, className }: ContratoArquivosProps) {
   const { perfilAtivo } = useAuth();
   const [arquivosContratuais, setArquivosContratuais] = useState<ArquivoContrato[]>([]);
   const [arquivosRelatorios, setArquivosRelatorios] = useState<ArquivoContrato[]>([]);
@@ -70,6 +84,7 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
   }>({ open: false, arquivo: null });
   const [isDeleting, setIsDeleting] = useState(false);
   const [modeloRelatorio, setModeloRelatorio] = useState<ModeloRelatorioInfo | null>(null);
+  const [formularioAberto, setFormularioAberto] = useState(false);
 
   // Verificar se o usuário pode excluir arquivos (apenas admin)
   const canDelete = perfilAtivo?.nome === 'Administrador';
@@ -133,16 +148,6 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
     } catch (error) {
       console.error("❌ Erro ao carregar modelo de relatório:", error);
       // Não mostra toast de erro, apenas não exibe o botão
-    }
-  };
-
-  const handleDownloadModelo = async () => {
-    try {
-      await downloadModeloRelatorio();
-      toast.success("Download iniciado!");
-    } catch (error: any) {
-      console.error("❌ Erro ao baixar modelo:", error);
-      toast.error("Erro ao baixar modelo de relatório");
     }
   };
 
@@ -296,38 +301,42 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Modelo de Relatório (se existir) */}
-      {modeloRelatorio && (
-        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-4 shadow-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-600 text-white p-2 rounded-lg">
-                <IconFile className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="font-semibold text-purple-900 flex items-center gap-2">
-                  📋 Modelo de Relatório Fiscal
-                  <Badge className="bg-purple-600 text-white">Padrão do Sistema</Badge>
-                </p>
-                <p className="text-sm text-purple-700 mt-1">
-                  {modeloRelatorio.nome_original}
-                </p>
-                <p className="text-xs text-purple-600 mt-0.5">
-                  Use este modelo para criar relatórios padronizados
-                </p>
-              </div>
+      {/* Formulário de Fiscalização */}
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-4 shadow-md">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-600 text-white p-2 rounded-lg">
+              <ClipboardList className="w-6 h-6" />
             </div>
-            <Button
-              onClick={handleDownloadModelo}
-              className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
-              size="sm"
-            >
-              <IconDownload className="w-4 h-4 mr-2" />
-              Baixar Modelo
-            </Button>
+            <div>
+              <p className="font-semibold text-purple-900 flex items-center gap-2">
+                📋 Modelo de Relatório Fiscal
+                <Badge className="bg-purple-600 text-white">Padrão do Sistema</Badge>
+              </p>
+              <p className="text-sm text-purple-700 mt-1">
+                {modeloRelatorio?.nome_original || "Formulário de Fiscalização — Lei nº 14.133/2021"}
+              </p>
+              <p className="text-xs text-purple-600 mt-0.5">
+                Preencha o formulário diretamente no sistema e imprima ou salve como PDF
+              </p>
+            </div>
           </div>
+          <Button
+            onClick={() => setFormularioAberto(true)}
+            className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
+            size="sm"
+          >
+            <ClipboardList className="w-4 h-4 mr-2" />
+            Preencher Formulário
+          </Button>
         </div>
-      )}
+      </div>
+
+      <FormularioFiscalizacaoModal
+        open={formularioAberto}
+        onOpenChange={setFormularioAberto}
+        contrato={contrato}
+      />
 
       {/* Arquivos Contratuais */}
       <Card>

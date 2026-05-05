@@ -393,7 +393,20 @@ export default function DetalhesContrato() {
           </TabsList>
 
           <TabsContent value="arquivos" className="space-y-4">
-            <ContratoArquivos contratoId={parseInt(id!)} />
+            <ContratoArquivos
+              contratoId={parseInt(id!)}
+              contrato={{
+                nr_contrato: contrato.nr_contrato,
+                pae: (contrato as any).pae,
+                contratado_nome: contrato.contratado_nome,
+                contratado_cnpj: contrato.contratado?.cnpj,
+                objeto: contrato.objeto,
+                data_inicio: contrato.data_inicio,
+                data_fim: contrato.data_fim,
+                valor_global: contrato.valor_global,
+                fiscal_nome: contrato.fiscal_nome,
+              }}
+            />
           </TabsContent>
 
           <TabsContent value="pendencias" className="space-y-4">

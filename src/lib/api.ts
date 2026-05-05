@@ -2582,3 +2582,95 @@ export async function getAuditLogsByUsuario(
     console.log(`🔍 Buscando logs do usuário #${usuarioId}...`);
     return await api<AuditLog[]>(`/audit-logs/usuario/${usuarioId}?limit=${limit}`);
 }
+
+// ============================================================================
+// TERMOS ADITIVOS
+// ============================================================================
+
+export type TermoAditivo = {
+    id: number;
+    contrato_id: number;
+    numero_aditivo: number;
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto";
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao: string | null;
+    nova_data_fim: string | null;
+    valor_acrescimo: number | null;
+    valor_supressao: number | null;
+    pae: string | null;
+    observacoes: string | null;
+    arquivo_id: number | null;
+    arquivo_nome: string | null;
+    ativo: boolean;
+};
+
+export type TermoAditivoCreate = {
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto";
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao?: string | null;
+    nova_data_fim?: string | null;
+    valor_acrescimo?: number | null;
+    valor_supressao?: number | null;
+    pae?: string | null;
+    observacoes?: string | null;
+};
+
+export type TermoAditivoUpdate = Partial<TermoAditivoCreate>;
+
+export type TermoAditivoList = {
+    data: TermoAditivo[];
+    total: number;
+    contrato_id: number;
+};
+
+/**
+ * Lista todos os termos aditivos de um contrato
+ * GET /api/v1/contratos/{id}/aditivos/
+ */
+export async function getTermosAditivos(contratoId: number): Promise<TermoAditivoList> {
+    return await api<TermoAditivoList>(`/contratos/${contratoId}/aditivos/`);
+}
+
+/**
+ * Cria um novo termo aditivo
+ * POST /api/v1/contratos/{id}/aditivos/
+ */
+export async function createTermoAditivo(
+    contratoId: number,
+    dados: TermoAditivoCreate
+): Promise<TermoAditivo> {
+    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/`, {
+        method: "POST",
+        body: JSON.stringify(dados),
+    });
+}
+
+/**
+ * Atualiza um termo aditivo
+ * PATCH /api/v1/contratos/{id}/aditivos/{aditivo_id}
+ */
+export async function updateTermoAditivo(
+    contratoId: number,
+    aditivoId: number,
+    dados: TermoAditivoUpdate
+): Promise<TermoAditivo> {
+    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+        method: "PATCH",
+        body: JSON.stringify(dados),
+    });
+}
+
+/**
+ * Exclui um termo aditivo (soft delete)
+ * DELETE /api/v1/contratos/{id}/aditivos/{aditivo_id}
+ */
+export async function deleteTermoAditivo(
+    contratoId: number,
+    aditivoId: number
+): Promise<{ message: string }> {
+    return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+        method: "DELETE",
+    });
+}
