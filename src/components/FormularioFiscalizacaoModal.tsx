@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { api } from "@/lib/axios";
 import {
   Dialog,
@@ -9,7 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Printer, Loader2 } from "lucide-react";
+import { Printer, Loader2, Save, FileText } from "lucide-react";
 
 interface ContratoInfo {
   id?: number;
@@ -28,6 +28,10 @@ interface FormularioFiscalizacaoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contrato?: ContratoInfo;
+  /** Se informado, o modal entra em modo edição (PATCH em vez de POST) */
+  relatorioId?: number;
+  /** Dados pré-preenchidos ao abrir para edição */
+  dadosIniciais?: Partial<RespostasForm>;
 }
 
 interface RespostasForm {
@@ -200,15 +204,90 @@ export function FormularioFiscalizacaoModal({
   open,
   onOpenChange,
   contrato,
+  relatorioId,
+  dadosIniciais,
 }: FormularioFiscalizacaoModalProps) {
 
-  // console.log("DADOS DO CONTRATO RECEBIDOS:", contrato);
-
   const [respostas, setRespostas] = useState<RespostasForm>(respostasIniciais);
+  const [isSalvandoRascunho, setIsSalvandoRascunho] = useState(false);
+  const [isSalvando, setIsSalvando] = useState(false);
   const [isGerandoPdf, setIsGerandoPdf] = useState(false);
+
+  // Pré-preenche o formulário quando aberto em modo edição
+  useEffect(() => {
+    if (open && dadosIniciais) {
+      setRespostas({ ...respostasIniciais, ...dadosIniciais });
+    } else if (!open) {
+      setRespostas(respostasIniciais);
+    }
+  }, [open, relatorioId]);
 
   const handleChange = (campo: keyof RespostasForm, valor: string) => {
     setRespostas((prev) => ({ ...prev, [campo]: valor }));
+  };
+
+  const buildPayloadBase = () => ({
+    execucao_objeto_sim: respostas.q1 === "sim",
+    execucao_objeto_detalhes: respostas.q1_detalhe,
+    prazo_execucao_sim: respostas.q2 === "sim",
+    prazo_execucao_detalhes: respostas.q2_detalhe,
+    nivel_qualidade_sim: respostas.q3 === "sim",
+    nivel_qualidade_detalhes: respostas.q3_detalhe,
+    medicoes_servicos_sim: respostas.q4 === "sim",
+    medicoes_servicos_detalhes: respostas.q4_detalhe,
+    ocorrencias_sim: respostas.q5 === "sim",
+    ocorrencias_detalhes: respostas.q5_detalhe,
+    documentos_habilitacao_sim: respostas.q6 === "sim",
+    documentos_habilitacao_detalhes: respostas.q6_detalhe,
+    subcontratacao_sim: respostas.q7 === "sim",
+    subcontratacao_detalhes: respostas.q7_detalhe,
+    obrigacoes_empregados_resposta: respostas.q8,
+    obrigacoes_empregados_detalhes: respostas.q8_detalhe,
+    garantias_contratuais_resposta: respostas.q9,
+    garantias_contratuais_detalhes: respostas.q9_detalhe,
+    execucao_satisfatoria_sim: respostas.q10 === "sim",
+    execucao_satisfatoria_detalhes: respostas.q10_detalhe,
+  });
+
+  const handleSalvar = async (status: "rascunho" | "finalizado") => {
+    if (!relatorioId && !contrato?.nr_contrato) {
+      alert("Erro: Não foi possível identificar o contrato.");
+      return;
+    }
+
+    if (status === "finalizado" && (!respostas.periodo_inicio || !respostas.periodo_fim || !respostas.data_assinatura)) {
+      alert("Por favor, preencha as datas do período de fiscalização e da assinatura.");
+      return;
+    }
+
+    const setter = status === "rascunho" ? setIsSalvandoRascunho : setIsSalvando;
+    setter(true);
+
+    try {
+      const payload = {
+        status,
+        ...(respostas.periodo_inicio ? { periodo_inicio: respostas.periodo_inicio } : {}),
+        ...(respostas.periodo_fim ? { periodo_fim: respostas.periodo_fim } : {}),
+        ...(respostas.data_assinatura ? { data_relatorio: respostas.data_assinatura } : {}),
+        ...buildPayloadBase(),
+      };
+
+      if (relatorioId) {
+        // Modo edição — atualiza registro existente
+        await api.patch(`/relatorios/${relatorioId}`, payload);
+      } else {
+        // Modo criação — cria novo registro
+        await api.post(`/relatorios/salvar/${encodeURIComponent(contrato!.nr_contrato!)}`, payload);
+      }
+
+      alert(status === "rascunho" ? "Rascunho salvo com sucesso!" : "Relatório salvo com sucesso!");
+      onOpenChange(false);
+    } catch (error: any) {
+      console.error("Erro ao salvar:", error);
+      alert("Ocorreu um erro ao salvar. Verifique se o servidor está rodando.");
+    } finally {
+      setter(false);
+    }
   };
 
   const handleGerarPdf = async () => {
@@ -229,36 +308,7 @@ export function FormularioFiscalizacaoModal({
         periodo_inicio: respostas.periodo_inicio,
         periodo_fim: respostas.periodo_fim,
         data_relatorio: respostas.data_assinatura,
-
-        execucao_objeto_sim: respostas.q1 === "sim",
-        execucao_objeto_detalhes: respostas.q1_detalhe,
-
-        prazo_execucao_sim: respostas.q2 === "sim",
-        prazo_execucao_detalhes: respostas.q2_detalhe,
-
-        nivel_qualidade_sim: respostas.q3 === "sim",
-        nivel_qualidade_detalhes: respostas.q3_detalhe,
-
-        medicoes_servicos_sim: respostas.q4 === "sim",
-        medicoes_servicos_detalhes: respostas.q4_detalhe,
-
-        ocorrencias_sim: respostas.q5 === "sim",
-        ocorrencias_detalhes: respostas.q5_detalhe,
-
-        documentos_habilitacao_sim: respostas.q6 === "sim",
-        documentos_habilitacao_detalhes: respostas.q6_detalhe,
-
-        subcontratacao_sim: respostas.q7 === "sim",
-        subcontratacao_detalhes: respostas.q7_detalhe,
-
-        obrigacoes_empregados_resposta: respostas.q8,
-        obrigacoes_empregados_detalhes: respostas.q8_detalhe,
-
-        garantias_contratuais_resposta: respostas.q9,
-        garantias_contratuais_detalhes: respostas.q9_detalhe,
-
-        execucao_satisfatoria_sim: respostas.q10 === "sim",
-        execucao_satisfatoria_detalhes: respostas.q10_detalhe,
+        ...buildPayloadBase(),
       };
 
       const response = await api.post(
@@ -278,7 +328,6 @@ export function FormularioFiscalizacaoModal({
       window.URL.revokeObjectURL(url);
 
     } catch (error: any) {
-      // NOVA LÓGICA PARA LER O ERRO 422 ESCONDIDO NO BLOB
       if (error.response && error.response.status === 422 && error.response.data instanceof Blob) {
         const erroTexto = await error.response.data.text();
         console.error("ERRO DE VALIDAÇÃO DO FASTAPI:", erroTexto);
@@ -397,29 +446,59 @@ export function FormularioFiscalizacaoModal({
         </div>
 
         {/* Ações */}
-        <div className="flex justify-between pt-2">
-          <Button variant="outline" onClick={() => setRespostas(respostasIniciais)} disabled={isGerandoPdf}>
+        <div className="flex justify-between pt-2 flex-wrap gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setRespostas(respostasIniciais)}
+            disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
+          >
             Limpar formulário
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isGerandoPdf}>
+
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
+            >
               Fechar
             </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => handleSalvar("rascunho")}
+              disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
+              className="border-amber-500 text-amber-700 hover:bg-amber-50"
+            >
+              {isSalvandoRascunho ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</>
+              ) : (
+                <><Save className="w-4 h-4 mr-2" />Salvar Rascunho</>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => handleSalvar("finalizado")}
+              disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
+              className="border-green-600 text-green-700 hover:bg-green-50"
+            >
+              {isSalvando ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Salvando...</>
+              ) : (
+                <><FileText className="w-4 h-4 mr-2" />Salvar Relatório</>
+              )}
+            </Button>
+
             <Button
               onClick={handleGerarPdf}
-              disabled={isGerandoPdf}
-              className="bg-blue-800 hover:bg-blue-900 text-white min-w-[200px]"
+              disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
+              className="bg-blue-800 hover:bg-blue-900 text-white"
             >
               {isGerandoPdf ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Gerando Documento...
-                </>
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Gerando PDF...</>
               ) : (
-                <>
-                  <Printer className="w-4 h-4 mr-2" />
-                  Salvar PDF Assinado
-                </>
+                <><Printer className="w-4 h-4 mr-2" />Gerar PDF</>
               )}
             </Button>
           </div>

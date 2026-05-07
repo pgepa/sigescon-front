@@ -2333,6 +2333,58 @@ export async function getModeloRelatorioInfo(): Promise<ModeloRelatorioInfo | nu
     return await api<ModeloRelatorioInfo | null>('/config/modelo-relatorio/info');
 }
 
+export type RelatorioFiscalizacaoItem = {
+    id: number;
+    periodo_inicio: string | null;
+    periodo_fim: string | null;
+    data_relatorio: string | null;
+    status: string;
+    created_at: string | null;
+};
+
+export type RelatorioFiscalizacaoFormData = RelatorioFiscalizacaoItem & {
+    execucao_objeto_sim: boolean | null;
+    execucao_objeto_detalhes: string | null;
+    prazo_execucao_sim: boolean | null;
+    prazo_execucao_detalhes: string | null;
+    nivel_qualidade_sim: boolean | null;
+    nivel_qualidade_detalhes: string | null;
+    medicoes_servicos_sim: boolean | null;
+    medicoes_servicos_detalhes: string | null;
+    ocorrencias_sim: boolean | null;
+    ocorrencias_detalhes: string | null;
+    documentos_habilitacao_sim: boolean | null;
+    documentos_habilitacao_detalhes: string | null;
+    subcontratacao_sim: boolean | null;
+    subcontratacao_detalhes: string | null;
+    obrigacoes_empregados_resposta: string | null;
+    obrigacoes_empregados_detalhes: string | null;
+    garantias_contratuais_resposta: string | null;
+    garantias_contratuais_detalhes: string | null;
+    execucao_satisfatoria_sim: boolean | null;
+    execucao_satisfatoria_detalhes: string | null;
+};
+
+export async function getDadosRelatorioFiscalizacao(relatorioId: number): Promise<RelatorioFiscalizacaoFormData> {
+    return api<RelatorioFiscalizacaoFormData>(`/relatorios/${relatorioId}/dados`);
+}
+
+export async function getRelatoriosFiscalizacao(contratoId: number): Promise<RelatorioFiscalizacaoItem[]> {
+    try {
+        const result = await api<RelatorioFiscalizacaoItem[]>(`/relatorios/listar/contrato/${contratoId}`);
+        console.log(`✅ Relatórios fiscalização contrato ${contratoId}:`, result);
+        return result;
+    } catch (error) {
+        console.error(`❌ Erro ao carregar relatórios fiscalização (contrato ${contratoId}):`, error);
+        return [];
+    }
+}
+
+export function getUrlPdfRelatorioSalvo(relatorioId: number): string {
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    return `${BASE_URL}/relatorios/gerar-pdf-salvo/${relatorioId}`;
+}
+
 /**
  * Faz upload do modelo de relatório
  * POST /api/v1/config/modelo-relatorio/upload

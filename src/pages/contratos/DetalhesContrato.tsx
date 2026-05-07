@@ -7,12 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import {
   ArrowLeft,
-  Calendar,
-  User,
-  Building,
-  FileText,
   DollarSign,
-  Clock,
   Edit,
   CheckCircle,
   Trash2
@@ -246,140 +241,78 @@ export default function DetalhesContrato() {
         </div>
       </div>
 
-      {/* Informações Principais */}
-      <div className="space-y-6">
+      {/* Informações Compactas */}
+      <div className="space-y-4">
         <Card>
-          <CardHeader>
-            <CardTitle>Informações Gerais</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <Building className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Contratado:</span>
-                  <p className="font-medium">{contrato.contratado_nome || "Não informado"}</p>
-                </div>
+          <CardContent className="py-4 px-5">
+            {/* Linha 1: dados principais */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Contratado</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{contrato.contratado_nome || "—"}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Modalidade:</span>
-                  <p className="font-medium">{contrato.modalidade_nome || "Não informado"}</p>
-                </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Modalidade</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{contrato.modalidade_nome || "—"}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Data de Início:</span>
-                  <p className="font-medium">{formatDate(contrato.data_inicio)}</p>
-                </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência</p>
+                <p className="font-semibold text-gray-800 mt-0.5">
+                  {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim)}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Data de Fim:</span>
-                  <p className="font-medium">{formatDate(contrato.data_fim)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Gestor:</span>
-                  <p className="font-medium">{contrato.gestor_nome || "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <User className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Fiscal:</span>
-                  <p className="font-medium">{contrato.fiscal_nome || "Não informado"}</p>
-                </div>
-              </div>
-              {contrato.fiscal_substituto_nome && (
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-gray-500" />
-                  <div>
-                    <span className="text-sm font-medium text-gray-600">Fiscal Substituto:</span>
-                    <p className="font-medium">{contrato.fiscal_substituto_nome}</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Informações Legais e Documentais</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-4">
-              <div className="flex items-start gap-2">
-                <FileText className="w-4 h-4 text-gray-500 mt-1" />
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-gray-600">Base Legal:</span>
-                  <p className="font-medium text-sm">{(contrato as any).base_legal || "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2">
-                <FileText className="w-4 h-4 text-gray-500 mt-1" />
-                <div className="flex-1">
-                  <span className="text-sm font-medium text-gray-600">Termos Contratuais:</span>
-                  <p className="font-medium text-sm">{(contrato as any).termos_contratuais || "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">PAE:</span>
-                  <p className="font-medium">{(contrato as any).pae || "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <FileText className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">DOE:</span>
-                  <p className="font-medium">{(contrato as any).doe || "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Data DOE:</span>
-                  <p className="font-medium">{(contrato as any).data_doe ? formatDate((contrato as any).data_doe) : "Não informado"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Garantia:</span>
-                  <p className="font-medium">{(contrato as any).garantia ? formatDate((contrato as any).garantia) : "Não informado"}</p>
-                </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Valor Global</p>
+                <p className="font-semibold text-green-600 mt-0.5">{formatCurrency(contrato.valor_global)}</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Valores</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Valor Anual:</span>
-                  <p className="font-medium text-green-600">{formatCurrency(contrato.valor_anual)}</p>
-                </div>
+            <hr className="my-3 border-gray-100" />
+
+            {/* Linha 2: pessoas e PAE */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Gestor</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{contrato.gestor_nome || "—"}</p>
               </div>
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-gray-500" />
-                <div>
-                  <span className="text-sm font-medium text-gray-600">Valor Global:</span>
-                  <p className="font-medium text-green-600">{formatCurrency(contrato.valor_global)}</p>
-                </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Fiscal</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{contrato.fiscal_nome || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Fiscal Substituto</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{contrato.fiscal_substituto_nome || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">PAE</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{(contrato as any).pae || "—"}</p>
+              </div>
+            </div>
+
+            <hr className="my-3 border-gray-100" />
+
+            {/* Linha 3: dados legais */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Base Legal</p>
+                <p className="font-semibold text-gray-800 mt-0.5">{(contrato as any).base_legal || "—"}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">DOE / Data DOE</p>
+                <p className="font-semibold text-gray-800 mt-0.5">
+                  {(contrato as any).doe || "—"}
+                  {(contrato as any).data_doe && ` · ${formatDate((contrato as any).data_doe)}`}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Garantia</p>
+                <p className="font-semibold text-gray-800 mt-0.5">
+                  {(contrato as any).garantia ? formatDate((contrato as any).garantia) : "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Valor Anual</p>
+                <p className="font-semibold text-green-600 mt-0.5">{formatCurrency(contrato.valor_anual)}</p>
               </div>
             </div>
           </CardContent>
