@@ -2338,8 +2338,11 @@ export type RelatorioFiscalizacaoItem = {
     periodo_inicio: string | null;
     periodo_fim: string | null;
     data_relatorio: string | null;
+    // rascunho | enviado | aprovado | nao_conforme
     status: string;
+    gestor_observacao: string | null;
     created_at: string | null;
+    updated_at: string | null;
 };
 
 export type RelatorioFiscalizacaoFormData = RelatorioFiscalizacaoItem & {
@@ -2378,6 +2381,34 @@ export async function getRelatoriosFiscalizacao(contratoId: number): Promise<Rel
         console.error(`❌ Erro ao carregar relatórios fiscalização (contrato ${contratoId}):`, error);
         return [];
     }
+}
+
+export async function enviarRelatorioParaGestor(relatorioId: number): Promise<{ id: number; status: string; mensagem: string }> {
+    return api<{ id: number; status: string; mensagem: string }>(`/relatorios/enviar/${relatorioId}`, {
+        method: 'POST',
+    });
+}
+
+export async function getRelatoriosParaGestor(contratoId: number): Promise<RelatorioFiscalizacaoItem[]> {
+    try {
+        const result = await api<RelatorioFiscalizacaoItem[]>(`/relatorios/gestor/contrato/${contratoId}`);
+        return result;
+    } catch (error) {
+        console.error(`❌ Erro ao carregar relatórios para gestor (contrato ${contratoId}):`, error);
+        return [];
+    }
+}
+
+export async function revisarRelatorio(
+    relatorioId: number,
+    status: 'aprovado' | 'nao_conforme',
+    gestor_observacao?: string,
+): Promise<{ id: number; status: string; mensagem: string }> {
+    return api<{ id: number; status: string; mensagem: string }>(`/relatorios/${relatorioId}/revisar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, gestor_observacao: gestor_observacao ?? null }),
+    });
 }
 
 export function getUrlPdfRelatorioSalvo(relatorioId: number): string {

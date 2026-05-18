@@ -12,6 +12,7 @@ import {
   IconUser,
   IconAlertTriangle,
   IconClipboardList,
+  IconX,
 } from "@tabler/icons-react";
 import { FileText } from "lucide-react";
 
@@ -43,8 +44,11 @@ import {
   deleteArquivoContrato,
   getModeloRelatorioInfo,
   getRelatoriosFiscalizacao,
+  getRelatoriosParaGestor,
   getDadosRelatorioFiscalizacao,
   getUrlPdfRelatorioSalvo,
+  enviarRelatorioParaGestor,
+  revisarRelatorio,
   type ModeloRelatorioInfo,
   type RelatorioFiscalizacaoItem,
   type RelatorioFiscalizacaoFormData,
@@ -89,6 +93,13 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
     dados: RelatorioFiscalizacaoFormData;
   } | null>(null);
   const [carregandoEdicao, setCarregandoEdicao] = useState<number | null>(null);
+  const [enviando, setEnviando] = useState<number | null>(null);
+  const [revisando, setRevisando] = useState<number | null>(null);
+  const [naoConformeDialog, setNaoConformeDialog] = useState<{
+    open: boolean;
+    relatorioId: number | null;
+    observacao: string;
+  }>({ open: false, relatorioId: null, observacao: "" });
   const [isLoading, setIsLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -173,8 +184,58 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
     }
   };
 
+  const ehFiscal = perfilAtivo?.nome === "Fiscal";
+  const ehGestor = perfilAtivo?.nome === "Gestor" || perfilAtivo?.nome === "Administrador";
+
+  const handleEnviarParaGestor = async (relatorioId: number) => {
+    setEnviando(relatorioId);
+    try {
+      await enviarRelatorioParaGestor(relatorioId);
+      toast.success("Relatório enviado ao gestor com sucesso.");
+      await loadRelatoriosFiscalizacao();
+    } catch {
+      toast.error("Erro ao enviar relatório. Tente novamente.");
+    } finally {
+      setEnviando(null);
+    }
+  };
+
+  const handleAprovar = async (relatorioId: number) => {
+    setRevisando(relatorioId);
+    try {
+      await revisarRelatorio(relatorioId, "aprovado");
+      toast.success("Relatório aprovado com sucesso.");
+      await loadRelatoriosFiscalizacao();
+    } catch {
+      toast.error("Erro ao aprovar relatório. Tente novamente.");
+    } finally {
+      setRevisando(null);
+    }
+  };
+
+  const handleNaoConformeConfirmar = async () => {
+    const { relatorioId, observacao } = naoConformeDialog;
+    if (!relatorioId) return;
+    setRevisando(relatorioId);
+    setNaoConformeDialog((prev) => ({ ...prev, open: false }));
+    try {
+      await revisarRelatorio(relatorioId, "nao_conforme", observacao);
+      toast.success("Irregularidade registrada. Fiscal notificado.");
+      await loadRelatoriosFiscalizacao();
+    } catch {
+      toast.error("Erro ao registrar irregularidade. Tente novamente.");
+    } finally {
+      setRevisando(null);
+      setNaoConformeDialog({ open: false, relatorioId: null, observacao: "" });
+    }
+  };
+
   const loadRelatoriosFiscalizacao = async () => {
-    const data = await getRelatoriosFiscalizacao(contratoId);
+    console.log(`[Relatórios] perfil=${perfilAtivo?.nome} ehGestor=${ehGestor} contratoId=${contratoId}`);
+    const data = ehGestor
+      ? await getRelatoriosParaGestor(contratoId)
+      : await getRelatoriosFiscalizacao(contratoId);
+    console.log(`[Relatórios] retornados:`, data.length, data.map(r => r.status));
     setRelatoriosFiscalizacao(data);
   };
 
@@ -193,7 +254,9 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
 
   useEffect(() => {
     loadArquivos();
-  }, [contratoId]);
+  // perfilAtivo?.nome garante que o endpoint correto é chamado após o perfil ser carregado
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contratoId, perfilAtivo?.nome]);
 
   // Meses disponíveis para o filtro (derivado dos dados carregados)
   const mesesDisponiveis = useMemo(() => {
@@ -562,13 +625,29 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                           </div>
                         </TableCell>
                         <TableCell>
-                          {rel.status === "rascunho" ? (
+                          {rel.status === "rascunho" && (
                             <Badge variant="outline" className="border-amber-400 text-amber-700 bg-amber-50">
                               Rascunho
                             </Badge>
-                          ) : (
+                          )}
+                          {rel.status === "enviado" && (
+                            <Badge variant="outline" className="border-blue-400 text-blue-700 bg-blue-50">
+                              Pendente
+                            </Badge>
+                          )}
+                          {rel.status === "aprovado" && (
                             <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">
-                              Finalizado
+                              Aprovado
+                            </Badge>
+                          )}
+                          {rel.status === "nao_conforme" && (
+                            <Badge variant="outline" className="border-red-400 text-red-700 bg-red-50">
+                              Não Conforme
+                            </Badge>
+                          )}
+                          {rel.status === "finalizado" && (
+                            <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">
+                              Aprovado
                             </Badge>
                           )}
                         </TableCell>
@@ -578,31 +657,79 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                             : "—"}
                         </TableCell>
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            {rel.status === "rascunho" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="gap-1 border-amber-400 text-amber-700 hover:bg-amber-50"
-                                disabled={carregandoEdicao === rel.id}
-                                onClick={() => handleAbrirEdicao(rel.id)}
-                              >
-                                {carregandoEdicao === rel.id ? (
-                                  <><span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />Carregando...</>
-                                ) : (
-                                  <>✏️ Editar</>
-                                )}
-                              </Button>
+                          <div className="flex justify-end items-center gap-2">
+
+                            {/* === AÇÕES DO FISCAL === */}
+                            {ehFiscal && rel.status === "rascunho" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2.5 text-xs gap-1 border-amber-400 text-amber-700 hover:bg-amber-50"
+                                  disabled={carregandoEdicao === rel.id || enviando === rel.id}
+                                  onClick={() => handleAbrirEdicao(rel.id)}
+                                >
+                                  {carregandoEdicao === rel.id
+                                    ? <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                    : <>✏️ Editar</>}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                  disabled={enviando === rel.id || carregandoEdicao === rel.id}
+                                  onClick={() => handleEnviarParaGestor(rel.id)}
+                                >
+                                  {enviando === rel.id
+                                    ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    : <>📤 Enviar</>}
+                                </Button>
+                              </>
                             )}
+                            {ehFiscal && rel.status === "nao_conforme" && (
+                              <span
+                                className="text-xs text-red-600 italic self-center max-w-[200px] truncate"
+                                title={rel.gestor_observacao ?? "Retornado pelo gestor"}
+                              >
+                                {rel.gestor_observacao ? `Obs: ${rel.gestor_observacao}` : "Retornado pelo gestor"}
+                              </span>
+                            )}
+
+                            {/* === AÇÕES DO GESTOR === */}
+                            {ehGestor && rel.status === "enviado" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  className="h-7 px-2.5 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                                  disabled={revisando === rel.id}
+                                  onClick={() => handleAprovar(rel.id)}
+                                >
+                                  {revisando === rel.id
+                                    ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    : <><span>✅</span> Aprovar</>}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 px-2 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
+                                  disabled={revisando === rel.id}
+                                  title="Registrar não conformidade"
+                                  onClick={() => setNaoConformeDialog({ open: true, relatorioId: rel.id, observacao: "" })}
+                                >
+                                  <IconX className="w-3.5 h-3.5" />
+                                  N. Conforme
+                                </Button>
+                              </>
+                            )}
+
                             <a
                               href={getUrlPdfRelatorioSalvo(rel.id)}
                               target="_blank"
                               rel="noopener noreferrer"
                               title="Baixar relatório em PDF"
                             >
-                              <Button size="sm" variant="outline" className="gap-1">
-                                <IconDownload className="w-4 h-4" />
-                                Baixar PDF
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
+                                <IconDownload className="w-3.5 h-3.5" />
+                                Baixar
                               </Button>
                             </a>
                           </div>
@@ -616,6 +743,40 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de Não Conforme — gestor registra irregularidade */}
+      <AlertDialog
+        open={naoConformeDialog.open}
+        onOpenChange={(open) => !open && setNaoConformeDialog({ open: false, relatorioId: null, observacao: "" })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <IconAlertTriangle className="w-5 h-5 text-red-600" />
+              Registrar Não Conformidade
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O relatório será retornado ao fiscal. Informe a irregularidade identificada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <textarea
+            className="w-full mt-2 p-2 border border-gray-300 rounded text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
+            rows={4}
+            placeholder="Descreva a irregularidade ou o que precisa ser corrigido..."
+            value={naoConformeDialog.observacao}
+            onChange={(e) => setNaoConformeDialog((prev) => ({ ...prev, observacao: e.target.value }))}
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={handleNaoConformeConfirmar}
+            >
+              Confirmar Não Conformidade
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog de Confirmação de Exclusão */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, arquivo: null })}>

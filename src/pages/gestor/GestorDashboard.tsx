@@ -9,10 +9,10 @@ import {
   IconCheck,
   IconUser,
   IconCalendar,
+  IconChevronRight,
 } from "@tabler/icons-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   getDashboardGestorCompleto,
   type DashboardGestorCompletoResponse
 } from "@/lib/api";
@@ -22,16 +22,12 @@ export function GestorDashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardGestorCompletoResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Carregar dados do dashboard
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      console.log("🔍 Carregando dashboard completo do gestor...");
       const data = await getDashboardGestorCompleto();
       setDashboardData(data);
-      console.log("✅ Dashboard carregado:", data);
     } catch (error) {
-      console.error("❌ Erro ao carregar dashboard:", error);
       toast.error("Erro ao carregar dados do dashboard");
     } finally {
       setIsLoading(false);
@@ -44,13 +40,17 @@ export function GestorDashboard() {
 
   if (isLoading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded"></div>
+      <div className="p-4 space-y-4">
+        <div className="animate-pulse space-y-4">
+          <div className="h-6 bg-gray-200 rounded w-48" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-20 bg-gray-200 rounded-lg" />
             ))}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="h-48 bg-gray-200 rounded-lg" />
+            <div className="h-48 bg-gray-200 rounded-lg" />
           </div>
         </div>
       </div>
@@ -59,12 +59,12 @@ export function GestorDashboard() {
 
   if (!dashboardData) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="text-center py-12">
-          <IconAlertTriangle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-600 mb-2">Erro ao carregar dashboard</h3>
-          <Button onClick={loadDashboardData} variant="outline">
-            <IconRefresh className="w-4 h-4 mr-2" />
+      <div className="p-4">
+        <div className="text-center py-10">
+          <IconAlertTriangle className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+          <p className="text-sm text-gray-600 mb-3">Erro ao carregar dashboard</p>
+          <Button onClick={loadDashboardData} variant="outline" size="sm">
+            <IconRefresh className="w-4 h-4 mr-1" />
             Tentar novamente
           </Button>
         </div>
@@ -72,210 +72,221 @@ export function GestorDashboard() {
     );
   }
 
+  const { contadores, pendencias } = dashboardData;
+  const totalPendencias = pendencias.estatisticas.vencidas + pendencias.estatisticas.pendentes;
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
+    <div className="p-4 space-y-4">
+      {/* Header compacto */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-blue-800">Dashboard Gestor</h1>
-          <p className="text-blue-600 mt-1">
-            Gerencie contratos, contratados e acompanhe o desempenho
-          </p>
+          <h1 className="text-xl font-bold text-blue-800">Dashboard Gestor</h1>
+          <p className="text-xs text-blue-500 mt-0.5">Contratos, pendências e desempenho da equipe</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={loadDashboardData} variant="outline" className="border-blue-200 text-blue-700 hover:bg-blue-50">
-            <IconRefresh className="mr-2 h-4 w-4" />
-            Atualizar
-          </Button>
+        <Button
+          onClick={loadDashboardData}
+          variant="outline"
+          size="sm"
+          className="border-blue-200 text-blue-600 hover:bg-blue-50 text-xs h-8"
+        >
+          <IconRefresh className="h-3.5 w-3.5 mr-1" />
+          Atualizar
+        </Button>
+      </div>
+
+      {/* Cards de métricas - 4 em linha */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-white border border-blue-100 rounded-lg p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-blue-600 font-medium">Contratos</span>
+            <IconFileText className="w-4 h-4 text-blue-400" />
+          </div>
+          <div className="text-2xl font-bold text-blue-800">{contadores.contratos_sob_gestao}</div>
+          <div className="text-xs text-gray-500 mt-0.5">{contadores.contratos_ativos_sob_gestao} ativos</div>
+        </div>
+
+        <div className="bg-white border border-red-100 rounded-lg p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-red-600 font-medium">Com Pendências</span>
+            <IconAlertTriangle className="w-4 h-4 text-red-400" />
+          </div>
+          <div className="text-2xl font-bold text-red-700">{totalPendencias}</div>
+          <div className="text-xs text-gray-500 mt-0.5">aguardando ação</div>
+        </div>
+
+        <div className="bg-white border border-orange-100 rounded-lg p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-orange-600 font-medium">Vencidas</span>
+            <IconClock className="w-4 h-4 text-orange-400" />
+          </div>
+          <div className="text-2xl font-bold text-orange-700">{pendencias.estatisticas.vencidas}</div>
+          <div className="text-xs text-gray-500 mt-0.5">em atraso</div>
+        </div>
+
+        <div className="bg-white border border-yellow-100 rounded-lg p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs text-yellow-600 font-medium">Ativas</span>
+            <IconClock className="w-4 h-4 text-yellow-400" />
+          </div>
+          <div className="text-2xl font-bold text-yellow-700">{pendencias.estatisticas.pendentes}</div>
+          <div className="text-xs text-gray-500 mt-0.5">no prazo</div>
         </div>
       </div>
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="border-blue-200 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-blue-700">Contratos Sob Gestão</CardTitle>
-            <IconFileText className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-800">{dashboardData.contadores.contratos_sob_gestao}</div>
-            <p className="text-xs text-blue-600 mb-2">
-              Contratos gerenciados
-            </p>
-            <div className="text-sm text-blue-700">
-              <span className="font-medium">{dashboardData.contadores.contratos_ativos_sob_gestao}</span> ativos
-            </div>
-          </CardContent>
-        </Card>
-
-
-        <Card className="border-red-200 shadow-lg hover:shadow-xl transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-red-700">Contratos com Pendências</CardTitle>
-            <IconAlertTriangle className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-800">{(dashboardData.pendencias.estatisticas.vencidas + dashboardData.pendencias.estatisticas.pendentes)}</div>
-            <p className="text-xs text-red-600">
-              Pendências em atraso
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-
-
-      {/* Seção de Pendências por Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Listas de pendências */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Pendências Vencidas */}
-        <Card className="border-red-200 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-800">
-              <IconAlertTriangle className="w-5 h-5" />
-              Pendências Vencidas
-              <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
-                {dashboardData.pendencias.estatisticas.vencidas}
+        <div className="bg-white border border-red-100 rounded-lg shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-red-100 bg-red-50">
+            <div className="flex items-center gap-2">
+              <IconAlertTriangle className="w-4 h-4 text-red-600" />
+              <span className="text-sm font-semibold text-red-800">Pendências Vencidas</span>
+              <span className="bg-red-200 text-red-800 text-xs px-1.5 py-0.5 rounded-full font-medium">
+                {pendencias.estatisticas.vencidas}
               </span>
-            </CardTitle>
-            <CardDescription>
-              Pendências em atraso que requerem ação urgente
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!dashboardData.pendencias.pendencias_vencidas || dashboardData.pendencias.pendencias_vencidas.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <IconCheck className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                <p className="text-sm">Nenhuma pendência vencida</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {(dashboardData.pendencias.pendencias_vencidas || []).slice(0, 5).map((pendencia) => (
-                  <div key={pendencia.pendencia_id} className="border border-red-200 rounded-lg p-3 bg-red-50">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium text-sm text-red-900">{pendencia.contrato_numero}</h4>
-                      <span className={`text-xs px-2 py-1 rounded-full ${
-                        pendencia.urgencia === 'CRÍTICA' ? 'bg-red-600 text-white' :
-                        pendencia.urgencia === 'ALTA' ? 'bg-orange-500 text-white' :
-                        'bg-yellow-500 text-white'
-                      }`}>
-                        {pendencia.urgencia}
-                      </span>
-                    </div>
-                    <p className="text-xs text-red-700 mb-2">{(pendencia as any).descricao || pendencia.pendencia_titulo || 'Sem descrição'}</p>
-                    <div className="flex items-center justify-between text-xs text-red-600">
-                      <div className="flex items-center gap-1">
-                        <IconUser className="w-3 h-3" />
-                        {pendencia.fiscal_nome}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <IconClock className="w-3 h-3" />
-                        {(() => {
-                          const dataPrazo = (pendencia as any).data_prazo || pendencia.prazo_entrega;
-                          if (dataPrazo) {
-                            const prazo = new Date(dataPrazo);
-                            const hoje = new Date();
-                            const diffTime = hoje.getTime() - prazo.getTime();
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            return diffDays > 0 ? `${diffDays} dias em atraso` : 'No prazo';
-                          }
-                          return 'Em atraso';
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {(dashboardData.pendencias.pendencias_vencidas || []).length > 5 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => navigate("/pendencias")}
-                    className="w-full border-red-200 text-red-700 hover:bg-red-50"
-                  >
-                    Ver todas ({(dashboardData.pendencias.pendencias_vencidas || []).length})
-                  </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
 
-        {/* Pendências Pendentes */}
-        <Card className="border-yellow-200 shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-yellow-800">
-              <IconClock className="w-5 h-5" />
-              Pendências Ativas
-              <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full">
-                {dashboardData.pendencias.estatisticas.pendentes}
-              </span>
-            </CardTitle>
-            <CardDescription>
-              Pendências aguardando envio de relatório
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {!dashboardData.pendencias.pendencias_pendentes || dashboardData.pendencias.pendencias_pendentes.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <IconCheck className="w-8 h-8 mx-auto mb-2 text-green-500" />
-                <p className="text-sm">Nenhuma pendência ativa</p>
+          <div className="p-3">
+            {!pendencias.pendencias_vencidas || pendencias.pendencias_vencidas.length === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <IconCheck className="w-6 h-6 mx-auto mb-1.5 text-green-400" />
+                <p className="text-xs">Nenhuma pendência vencida</p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto">
-                {(dashboardData.pendencias.pendencias_pendentes || []).slice(0, 5).map((pendencia) => (
-                  <div key={pendencia.pendencia_id} className="border border-yellow-200 rounded-lg p-3 bg-yellow-50">
-                    <div className="flex justify-between items-start mb-2">
-                      <h4 className="font-medium text-sm text-yellow-900">{pendencia.contrato_numero}</h4>
-                      <span className="text-xs text-yellow-700 bg-yellow-200 px-2 py-1 rounded-full">
-                        {(() => {
-                          const dataPrazo = (pendencia as any).data_prazo || pendencia.prazo_entrega;
-                          if (dataPrazo) {
-                            const prazo = new Date(dataPrazo);
-                            const hoje = new Date();
-                            const diffTime = prazo.getTime() - hoje.getTime();
-                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                            return diffDays > 0 ? `${diffDays} dias restantes` : 'Vence hoje';
-                          }
-                          return 'Vence hoje';
-                        })()}
-                      </span>
-                    </div>
-                    <p className="text-xs text-yellow-700 mb-2">{(pendencia as any).descricao || pendencia.pendencia_titulo || 'Sem descrição'}</p>
-                    <div className="flex items-center justify-between text-xs text-yellow-600">
-                      <div className="flex items-center gap-1">
-                        <IconUser className="w-3 h-3" />
-                        {pendencia.fiscal_nome}
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {pendencias.pendencias_vencidas.slice(0, 5).map((pendencia) => {
+                  const dataPrazo = (pendencia as any).data_prazo || pendencia.prazo_entrega;
+                  const diasAtraso = dataPrazo
+                    ? Math.ceil((new Date().getTime() - new Date(dataPrazo).getTime()) / 86400000)
+                    : null;
+
+                  return (
+                    <div key={pendencia.pendencia_id} className="flex items-start justify-between gap-2 p-2.5 rounded-md bg-red-50 border border-red-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-xs font-semibold text-red-900 truncate">{pendencia.contrato_numero}</span>
+                          {pendencia.urgencia && (
+                            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              pendencia.urgencia === 'CRÍTICA' ? 'bg-red-600 text-white' :
+                              pendencia.urgencia === 'ALTA' ? 'bg-orange-500 text-white' :
+                              'bg-yellow-500 text-white'
+                            }`}>
+                              {pendencia.urgencia}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-red-700 truncate">
+                          {(pendencia as any).descricao || pendencia.pendencia_titulo || 'Sem descrição'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-red-500">
+                          <span className="flex items-center gap-0.5">
+                            <IconUser className="w-3 h-3" />
+                            {pendencia.fiscal_nome}
+                          </span>
+                          {diasAtraso && diasAtraso > 0 && (
+                            <span className="flex items-center gap-0.5 text-red-600 font-medium">
+                              <IconClock className="w-3 h-3" />
+                              {diasAtraso}d atraso
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <IconCalendar className="w-3 h-3" />
-                        Prazo: {(() => {
-                          const dataPrazo = (pendencia as any).data_prazo || pendencia.prazo_entrega;
-                          if (dataPrazo && dataPrazo !== 'Invalid Date') {
-                            try {
-                              return new Date(dataPrazo).toLocaleDateString('pt-BR');
-                            } catch {
-                              return 'Data inválida';
-                            }
-                          }
-                          return 'Data inválida';
-                        })()}
-                      </div>
                     </div>
-                  </div>
-                ))}
-                {(dashboardData.pendencias.pendencias_pendentes || []).length > 5 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  );
+                })}
+                {pendencias.pendencias_vencidas.length > 5 && (
+                  <button
                     onClick={() => navigate("/pendencias")}
-                    className="w-full border-yellow-200 text-yellow-700 hover:bg-yellow-50"
+                    className="w-full flex items-center justify-center gap-1 text-xs text-red-600 hover:text-red-800 py-1.5 border border-red-200 rounded-md hover:bg-red-50 transition-colors"
                   >
-                    Ver todas ({(dashboardData.pendencias.pendencias_pendentes || []).length})
-                  </Button>
+                    Ver todas ({pendencias.pendencias_vencidas.length})
+                    <IconChevronRight className="w-3.5 h-3.5" />
+                  </button>
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Pendências Ativas */}
+        <div className="bg-white border border-yellow-100 rounded-lg shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-yellow-100 bg-yellow-50">
+            <div className="flex items-center gap-2">
+              <IconClock className="w-4 h-4 text-yellow-600" />
+              <span className="text-sm font-semibold text-yellow-800">Pendências Ativas</span>
+              <span className="bg-yellow-200 text-yellow-800 text-xs px-1.5 py-0.5 rounded-full font-medium">
+                {pendencias.estatisticas.pendentes}
+              </span>
+            </div>
+          </div>
+
+          <div className="p-3">
+            {!pendencias.pendencias_pendentes || pendencias.pendencias_pendentes.length === 0 ? (
+              <div className="text-center py-6 text-gray-400">
+                <IconCheck className="w-6 h-6 mx-auto mb-1.5 text-green-400" />
+                <p className="text-xs">Nenhuma pendência ativa</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-56 overflow-y-auto">
+                {pendencias.pendencias_pendentes.slice(0, 5).map((pendencia) => {
+                  const dataPrazo = (pendencia as any).data_prazo || pendencia.prazo_entrega;
+                  let diasRestantes: number | null = null;
+                  let prazoFormatado = "Data inválida";
+
+                  if (dataPrazo) {
+                    try {
+                      const prazo = new Date(dataPrazo);
+                      diasRestantes = Math.ceil((prazo.getTime() - new Date().getTime()) / 86400000);
+                      prazoFormatado = prazo.toLocaleDateString("pt-BR");
+                    } catch {}
+                  }
+
+                  return (
+                    <div key={pendencia.pendencia_id} className="flex items-start justify-between gap-2 p-2.5 rounded-md bg-yellow-50 border border-yellow-100">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <span className="text-xs font-semibold text-yellow-900 truncate">{pendencia.contrato_numero}</span>
+                          {diasRestantes !== null && (
+                            <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              diasRestantes <= 0 ? 'bg-red-100 text-red-700' :
+                              diasRestantes <= 3 ? 'bg-orange-100 text-orange-700' :
+                              'bg-yellow-100 text-yellow-700'
+                            }`}>
+                              {diasRestantes <= 0 ? 'Vence hoje' : `${diasRestantes}d restantes`}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-yellow-700 truncate">
+                          {(pendencia as any).descricao || pendencia.pendencia_titulo || 'Sem descrição'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 text-[11px] text-yellow-600">
+                          <span className="flex items-center gap-0.5">
+                            <IconUser className="w-3 h-3" />
+                            {pendencia.fiscal_nome}
+                          </span>
+                          <span className="flex items-center gap-0.5">
+                            <IconCalendar className="w-3 h-3" />
+                            {prazoFormatado}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {pendencias.pendencias_pendentes.length > 5 && (
+                  <button
+                    onClick={() => navigate("/pendencias")}
+                    className="w-full flex items-center justify-center gap-1 text-xs text-yellow-600 hover:text-yellow-800 py-1.5 border border-yellow-200 rounded-md hover:bg-yellow-50 transition-colors"
+                  >
+                    Ver todas ({pendencias.pendencias_pendentes.length})
+                    <IconChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
