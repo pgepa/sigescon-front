@@ -249,13 +249,13 @@ export function FormularioFiscalizacaoModal({
     execucao_satisfatoria_detalhes: respostas.q10_detalhe,
   });
 
-  const handleSalvar = async (status: "rascunho" | "finalizado") => {
+  const handleSalvar = async (status: "rascunho" | "enviado") => {
     if (!relatorioId && !contrato?.nr_contrato) {
       alert("Erro: Não foi possível identificar o contrato.");
       return;
     }
 
-    if (status === "finalizado" && (!respostas.periodo_inicio || !respostas.periodo_fim || !respostas.data_assinatura)) {
+    if (status === "enviado" && (!respostas.periodo_inicio || !respostas.periodo_fim || !respostas.data_assinatura)) {
       alert("Por favor, preencha as datas do período de fiscalização e da assinatura.");
       return;
     }
@@ -264,27 +264,44 @@ export function FormularioFiscalizacaoModal({
     setter(true);
 
     try {
+      // O backend só aceita "rascunho" nos endpoints de salvar/editar.
+      // Para enviar, usa-se o endpoint dedicado POST /relatorios/enviar/{id}.
       const payload = {
-        status,
+        status: "rascunho",
         ...(respostas.periodo_inicio ? { periodo_inicio: respostas.periodo_inicio } : {}),
         ...(respostas.periodo_fim ? { periodo_fim: respostas.periodo_fim } : {}),
         ...(respostas.data_assinatura ? { data_relatorio: respostas.data_assinatura } : {}),
         ...buildPayloadBase(),
       };
 
+      let idParaEnviar: number | undefined = relatorioId;
+
       if (relatorioId) {
-        // Modo edição — atualiza registro existente
         await api.patch(`/relatorios/${relatorioId}`, payload);
       } else {
-        // Modo criação — cria novo registro
-        await api.post(`/relatorios/salvar/${encodeURIComponent(contrato!.nr_contrato!)}`, payload);
+        const resposta = await api.post(`/relatorios/salvar/${encodeURIComponent(contrato!.nr_contrato!)}`, payload);
+        idParaEnviar = resposta.data?.id;
       }
 
-      alert(status === "rascunho" ? "Rascunho salvo com sucesso!" : "Relatório salvo com sucesso!");
+      if (status === "enviado" && idParaEnviar) {
+        await api.post(`/relatorios/enviar/${idParaEnviar}`);
+      }
+
+      alert(status === "rascunho" ? "Rascunho salvo com sucesso!" : "Relatório enviado com sucesso!");
       onOpenChange(false);
     } catch (error: any) {
       console.error("Erro ao salvar:", error);
-      alert("Ocorreu um erro ao salvar. Verifique se o servidor está rodando.");
+      if (error.response) {
+        const { status, data } = error.response;
+        const detail = data?.detail
+          ? (typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail))
+          : JSON.stringify(data);
+        alert(`Erro ${status}: ${detail}`);
+      } else if (error.request) {
+        alert("Não foi possível conectar ao servidor. Verifique se o servidor está rodando.");
+      } else {
+        alert(`Erro ao salvar: ${error.message}`);
+      }
     } finally {
       setter(false);
     }
@@ -328,13 +345,21 @@ export function FormularioFiscalizacaoModal({
       window.URL.revokeObjectURL(url);
 
     } catch (error: any) {
-      if (error.response && error.response.status === 422 && error.response.data instanceof Blob) {
+      if (error.response?.data instanceof Blob) {
         const erroTexto = await error.response.data.text();
-        console.error("ERRO DE VALIDAÇÃO DO FASTAPI:", erroTexto);
-        alert("Erro 422: Olhe o Console (F12) para ver qual campo o backend recusou.");
+        console.error("Erro ao gerar PDF:", erroTexto);
+        try {
+          const parsed = JSON.parse(erroTexto);
+          const detail = parsed?.detail
+            ? (typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail))
+            : erroTexto;
+          alert(`Erro ${error.response.status}: ${detail}`);
+        } catch {
+          alert(`Erro ${error.response.status}: ${erroTexto}`);
+        }
       } else {
         console.error("Erro ao gerar PDF:", error);
-        alert("Ocorreu um erro ao gerar o PDF. Verifique se o servidor está rodando.");
+        alert(`Erro ao gerar o PDF: ${error.message}`);
       }
     } finally {
       setIsGerandoPdf(false);
@@ -479,7 +504,7 @@ export function FormularioFiscalizacaoModal({
 
             <Button
               variant="outline"
-              onClick={() => handleSalvar("finalizado")}
+              onClick={() => handleSalvar("enviado")}
               disabled={isSalvandoRascunho || isSalvando || isGerandoPdf}
               className="border-green-600 text-green-700 hover:bg-green-50"
             >

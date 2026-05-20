@@ -41,7 +41,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
     getContratos,
     deleteContrato,
-    getPendenciasByContratoId,
     createPendencia,
     getContratados,
     getStatus,
@@ -135,18 +134,6 @@ type ContratoList = {
 };
 
 
-type Pendencia = {
-    descricao: string;
-    data_prazo: string;
-    status_pendencia_id: number;
-    criado_por_usuario_id: number;
-    id: number;
-    contrato_id: number;
-    created_at: string;
-    updated_at: string;
-    status_nome: string | null;
-    criado_por_nome: string | null;
-};
 
 type NewPendenciaPayload = {
     descricao: string;
@@ -1099,6 +1086,28 @@ const columns: ColumnDef<ContratoList>[] = [
     { accessorKey: "garantia_prazo_dias" },
 ];
 
+function gerarDescricaoAditivo(
+    tipo: string | undefined,
+    dataAssinatura?: string,
+    novaDataFim?: string | null,
+    valorAcrescimo?: number | null
+): string {
+    if (!tipo) return "";
+    const fmt = (d: string) => { const [y, m, dia] = d.split("-"); return `${dia}/${m}/${y}`; };
+    if (tipo === "Prazo") {
+        const assin = dataAssinatura ? fmt(dataAssinatura) : "—";
+        const fim = novaDataFim ? fmt(novaDataFim) : "—";
+        return `Aditamento de prazo - Data de assinatura: ${assin} - Nova data fim: ${fim}`;
+    }
+    if (tipo === "Valor") {
+        const val = valorAcrescimo != null
+            ? valorAcrescimo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : "—";
+        return `Aditamento de valor - Acréscimo de R$ ${val}`;
+    }
+    return "";
+}
+
 export function ContratosDataTable() {
     const { user, perfilAtivo } = useAuth();
     const [searchParams] = useSearchParams();
@@ -1114,6 +1123,7 @@ export function ContratosDataTable() {
     const isGestor = perfilAtivo?.nome === "Gestor";
     const isFiscal = perfilAtivo?.nome === "Fiscal";
     const canManageContratos = isAdmin; // Apenas admin pode criar/editar/excluir
+    const canManageAditivos = isAdmin || isGestor; // Admin e Gestor podem gerenciar termos aditivos
     
     // Título dinâmico baseado no perfil
     const getPageTitle = () => {
@@ -1173,7 +1183,7 @@ export function ContratosDataTable() {
         e.stopPropagation();
         const dados = novoAditivo[contratoId];
         if (!dados?.tipo || !dados?.objeto || !dados?.data_assinatura) {
-            toast.error("Preencha tipo, objeto e data de assinatura.");
+            toast.error("Preencha tipo, descrição e data de assinatura.");
             return;
         }
         setSalvandoAditivo(prev => new Set(prev).add(contratoId));
@@ -1220,7 +1230,7 @@ export function ContratosDataTable() {
         e.stopPropagation();
         const dados = editandoAditivo[aditivoId];
         if (!dados?.tipo || !dados?.objeto || !dados?.data_assinatura) {
-            toast.error("Preencha tipo, objeto e data de assinatura.");
+            toast.error("Preencha tipo, descrição e data de assinatura.");
             return;
         }
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
@@ -1685,7 +1695,7 @@ export function ContratosDataTable() {
                                                                                     Termos Aditivos — {c.nr_contrato}
                                                                                 </span>
                                                                             </div>
-                                                                            {canManageContratos && (
+                                                                            {canManageAditivos && (
                                                                                 <Button
                                                                                     size="sm"
                                                                                     variant="outline"
@@ -1699,7 +1709,7 @@ export function ContratosDataTable() {
                                                                                             return n;
                                                                                         });
                                                                                         if (abrindo) {
-                                                                                            setNovoAditivo(prev => ({ ...prev, [c.id]: { objeto: c.objeto } }));
+                                                                                            setNovoAditivo(prev => ({ ...prev, [c.id]: {} }));
                                                                                         }
                                                                                     }}
                                                                                 >
@@ -1714,14 +1724,25 @@ export function ContratosDataTable() {
                                                                             <div className="mb-3 p-4 bg-white rounded-md border border-indigo-200 grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
                                                                                 {/* Linha 1 */}
                                                                                 <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Tipo *</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
                                                                                     <Select
-                                                                                        onValueChange={v => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], tipo: v as TermoAditivoCreate["tipo"] } }))}
+                                                                                        onValueChange={v => {
+                                                                                            const tipo = v as TermoAditivoCreate["tipo"];
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    tipo,
+                                                                                                    objeto: gerarDescricaoAditivo(tipo, curr.data_assinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
                                                                                         value={novoAditivo[c.id]?.tipo ?? ""}
                                                                                     >
                                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                         <SelectContent>
-                                                                                            {["Prazo", "Valor", "Objeto", "Misto"].map(t => (
+                                                                                            {["Prazo", "Valor"].map(t => (
                                                                                                 <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                                                                             ))}
                                                                                         </SelectContent>
@@ -1733,7 +1754,18 @@ export function ContratosDataTable() {
                                                                                         type="date"
                                                                                         className="h-8 text-xs"
                                                                                         value={novoAditivo[c.id]?.data_assinatura ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_assinatura: e.target.value } }))}
+                                                                                        onChange={e => {
+                                                                                            const dataAssinatura = e.target.value;
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    data_assinatura: dataAssinatura,
+                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, dataAssinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
@@ -1742,7 +1774,18 @@ export function ContratosDataTable() {
                                                                                         type="date"
                                                                                         className="h-8 text-xs"
                                                                                         value={novoAditivo[c.id]?.nova_data_fim ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], nova_data_fim: e.target.value || null } }))}
+                                                                                        onChange={e => {
+                                                                                            const novaDataFim = e.target.value || null;
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    nova_data_fim: novaDataFim,
+                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, novaDataFim, curr.valor_acrescimo)
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
@@ -1752,7 +1795,18 @@ export function ContratosDataTable() {
                                                                                         className="h-8 text-xs"
                                                                                         placeholder="0,00"
                                                                                         value={novoAditivo[c.id]?.valor_acrescimo ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], valor_acrescimo: e.target.value ? parseFloat(e.target.value) : null } }))}
+                                                                                        onChange={e => {
+                                                                                            const valorAcrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    valor_acrescimo: valorAcrescimo,
+                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, curr.nova_data_fim, valorAcrescimo)
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
                                                                                     />
                                                                                 </div>
                                                                                 {/* Linha 2 */}
@@ -1766,10 +1820,10 @@ export function ContratosDataTable() {
                                                                                     />
                                                                                 </div>
                                                                                 <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Objeto *</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
                                                                                     <Input
                                                                                         className="h-8 text-xs"
-                                                                                        placeholder="Descreva o objeto do aditivo..."
+                                                                                        placeholder="Preenchido automaticamente conforme o tipo..."
                                                                                         value={novoAditivo[c.id]?.objeto ?? ""}
                                                                                         onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], objeto: e.target.value } }))}
                                                                                     />
@@ -1814,17 +1868,21 @@ export function ContratosDataTable() {
                                                                                         <tr>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-10">Nº</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-24">Tipo</th>
-                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700">Objeto</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700">Descrição</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Assinatura</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Vigência</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Acréscimo</th>
-                                                                                            {canManageContratos && <th className="w-8 px-3 py-2" />}
+                                                                                            {canManageAditivos && <th className="w-8 px-3 py-2" />}
                                                                                         </tr>
                                                                                     </thead>
                                                                                     <tbody className="bg-white divide-y divide-indigo-50">
-                                                                                        {(aditivosMap[c.id] ?? []).map(ad => (
+                                                                                        {[...(aditivosMap[c.id] ?? [])].sort((a, b) => b.numero_aditivo - a.numero_aditivo).map(ad => {
+                                                                                            const hoje = new Date(); hoje.setHours(0,0,0,0);
+                                                                                            const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
+                                                                                            const vigente = ad.ativo !== false && !expirado;
+                                                                                            return (
                                                                                             <React.Fragment key={ad.id}>
-                                                                                            <tr className="hover:bg-indigo-50/30 transition-colors">
+                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-100/70 opacity-70 hover:opacity-90 transition-colors"}>
                                                                                                 <td className="px-3 py-2 font-bold text-indigo-700">{ad.numero_aditivo}º</td>
                                                                                                 <td className="px-3 py-2">
                                                                                                     <Badge className="text-xs px-1.5 py-0 bg-indigo-100 text-indigo-800 border-indigo-200 border">
@@ -1835,7 +1893,7 @@ export function ContratosDataTable() {
                                                                                                 <td className="px-3 py-2 text-gray-600">{formatDate(ad.data_assinatura)}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
-                                                                                                {canManageContratos && (
+                                                                                                {canManageAditivos && (
                                                                                                     <td className="px-3 py-2">
                                                                                                         <div className="flex items-center gap-2">
                                                                                                             <button
@@ -1880,17 +1938,26 @@ export function ContratosDataTable() {
                                                                                                     <td colSpan={7} className="px-3 py-3">
                                                                                                         <div className="grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
                                                                                                             <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Tipo *</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
                                                                                                                 <Select
-                                                                                                                    onValueChange={v => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], tipo: v as TermoAditivoCreate["tipo"] } }))}
+                                                                                                                    onValueChange={v => {
+                                                                                                                        const tipo = v as TermoAditivoCreate["tipo"];
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                tipo,
+                                                                                                                                objeto: gerarDescricaoAditivo(tipo, curr.data_assinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
                                                                                                                     value={editandoAditivo[ad.id]?.tipo ?? ""}
                                                                                                                 >
                                                                                                                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                                                     <SelectContent>
                                                                                                                         <SelectItem value="Prazo">Prazo</SelectItem>
                                                                                                                         <SelectItem value="Valor">Valor</SelectItem>
-                                                                                                                        <SelectItem value="Objeto">Objeto</SelectItem>
-                                                                                                                        <SelectItem value="Misto">Misto</SelectItem>
                                                                                                                     </SelectContent>
                                                                                                                 </Select>
                                                                                                             </div>
@@ -1900,7 +1967,18 @@ export function ContratosDataTable() {
                                                                                                                     type="date"
                                                                                                                     className="h-8 text-xs"
                                                                                                                     value={editandoAditivo[ad.id]?.data_assinatura ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_assinatura: e.target.value } }))}
+                                                                                                                    onChange={e => {
+                                                                                                                        const dataAssinatura = e.target.value;
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                data_assinatura: dataAssinatura,
+                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, dataAssinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
@@ -1909,7 +1987,18 @@ export function ContratosDataTable() {
                                                                                                                     type="date"
                                                                                                                     className="h-8 text-xs"
                                                                                                                     value={editandoAditivo[ad.id]?.nova_data_fim ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], nova_data_fim: e.target.value || null } }))}
+                                                                                                                    onChange={e => {
+                                                                                                                        const novaDataFim = e.target.value || null;
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                nova_data_fim: novaDataFim,
+                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, novaDataFim, curr.valor_acrescimo)
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
@@ -1919,7 +2008,18 @@ export function ContratosDataTable() {
                                                                                                                     className="h-8 text-xs"
                                                                                                                     placeholder="0,00"
                                                                                                                     value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], valor_acrescimo: e.target.value ? parseFloat(e.target.value) : null } }))}
+                                                                                                                    onChange={e => {
+                                                                                                                        const valorAcrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                valor_acrescimo: valorAcrescimo,
+                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, curr.nova_data_fim, valorAcrescimo)
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
@@ -1932,9 +2032,10 @@ export function ContratosDataTable() {
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Objeto *</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
                                                                                                                 <Input
                                                                                                                     className="h-8 text-xs"
+                                                                                                                    placeholder="Preenchido automaticamente conforme o tipo..."
                                                                                                                     value={editandoAditivo[ad.id]?.objeto ?? ""}
                                                                                                                     onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], objeto: e.target.value } }))}
                                                                                                                 />
@@ -1962,7 +2063,7 @@ export function ContratosDataTable() {
                                                                                                 </tr>
                                                                                             )}
                                                                                             </React.Fragment>
-                                                                                        ))}
+                                                                                        ); })}
                                                                                     </tbody>
                                                                                 </table>
                                                                             </div>
