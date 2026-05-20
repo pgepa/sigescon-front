@@ -19,7 +19,8 @@ const tokenManager = {
     }),
     saveToken: (token: string, type: string = 'Bearer', refreshToken?: string): void => {
         localStorage.setItem('authToken', token);
-        localStorage.setItem('authTokenType', type);
+        // Cabeçalho HTTP Authorization usa "Bearer" (RFC 6757); a API pode retornar token_type em minúsculas.
+        localStorage.setItem('authTokenType', (type || 'Bearer').toLowerCase() === 'bearer' ? 'Bearer' : (type || 'Bearer'));
         if (refreshToken) {
             localStorage.setItem('refreshToken', refreshToken);
         }
@@ -369,8 +370,18 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
         }
         
         return data;
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('❌ Erro no login:', error);
+        const isNetwork =
+            error instanceof TypeError ||
+            (error instanceof Error && error.message === "Failed to fetch");
+        if (isNetwork) {
+            throw new Error(
+                "Não foi possível contatar o servidor de autenticação. Verifique se a API está no ar, " +
+                    "se VITE_AUTH_API_URL no build aponta para uma URL acessível pelo navegador (firewall/DNS), " +
+                    "se não há bloqueio HTTPS→HTTP (conteúdo misto) e se o CORS no FastAPI permite a origem do site.",
+            );
+        }
         throw error;
     }
 }

@@ -70,9 +70,15 @@ Você vai precisar ter o [Node.js](https://nodejs.org/) (versão 18 ou superior)
     npm install
     ```
 
-### Variáveis de Ambiente
+### Variáveis de Ambiente (produção)
 
-Antes de rodar a aplicação, você precisa configurar as variáveis de ambiente. Renomeie o arquivo `.env.example` para `.env` e preencha com a URL da sua API:
+Copie `.env.example` para `.env` e ajuste com as URLs **públicas ou alcançáveis pelo navegador** da API (sem barra no final). Em seguida rode `npm run build` — os valores são incorporados ao bundle.
 
 ```env
-VITE_API_URL="[http://sua-api-aqui.com/api](http://sua-api-aqui.com/api)"
+VITE_API_URL="https://seu-servidor/api/v1"
+VITE_AUTH_API_URL="https://seu-servidor/api/v1"
+```
+
+- **`VITE_API_URL`**: base dos endpoints REST (`/usuarios`, `/contratos`, …).
+- **`VITE_AUTH_API_URL`**: base das rotas `/auth/*` (login, contexto, logout). Com o sigescon-fastapi atual, use em geral a **mesma** base terminando em `/api/v1`.
+- O esquema (**HTTPS** vs **HTTP**) deve ser compatível com o do site: uma página HTTPS não pode chamar API HTTP (o navegador bloqueia).
