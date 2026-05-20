@@ -70,15 +70,18 @@ Você vai precisar ter o [Node.js](https://nodejs.org/) (versão 18 ou superior)
     npm install
     ```
 
-### Variáveis de Ambiente (produção)
+### Variáveis de Ambiente (produção / homologação)
 
-Copie `.env.example` para `.env` e ajuste com as URLs **públicas ou alcançáveis pelo navegador** da API (sem barra no final). Em seguida rode `npm run build` — os valores são incorporados ao bundle.
+Copie `.env.example` para `.env` com as URLs que o **navegador** do usuário consegue acessar (sem barra no final). Rode `npm run build` — os valores entram no bundle.
+
+Em **servidor de testes só com HTTP**, pode usar `http://` no front **e** na API; não há bloqueio de conteúdo misto enquanto as duas forem HTTP.
 
 ```env
-VITE_API_URL="https://seu-servidor/api/v1"
-VITE_AUTH_API_URL="https://seu-servidor/api/v1"
+VITE_API_URL="http://seu-servidor:8000/api/v1"
+VITE_AUTH_API_URL="http://seu-servidor:8000/api/v1"
 ```
+
+Quando migrar para **HTTPS** no site, a API também deve ser HTTPS (ou servida no mesmo host via proxy); página HTTPS não pode chamar API só em HTTP.
 
 - **`VITE_API_URL`**: base dos endpoints REST (`/usuarios`, `/contratos`, …).
 - **`VITE_AUTH_API_URL`**: base das rotas `/auth/*` (login, contexto, logout). Com o sigescon-fastapi atual, use em geral a **mesma** base terminando em `/api/v1`.
-- O esquema (**HTTPS** vs **HTTP**) deve ser compatível com o do site: uma página HTTPS não pode chamar API HTTP (o navegador bloqueia).

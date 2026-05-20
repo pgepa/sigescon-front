@@ -377,9 +377,10 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
             (error instanceof Error && error.message === "Failed to fetch");
         if (isNetwork) {
             throw new Error(
-                "Não foi possível contatar o servidor de autenticação. Verifique se a API está no ar, " +
-                    "se VITE_AUTH_API_URL no build aponta para uma URL acessível pelo navegador (firewall/DNS), " +
-                    "se não há bloqueio HTTPS→HTTP (conteúdo misto) e se o CORS no FastAPI permite a origem do site.",
+                "Não foi possível contatar o servidor de autenticação. Em ambiente só HTTP (front e API em http://), " +
+                    "verifique se o IP/host em VITE_AUTH_API_URL é alcançável pelo navegador do usuário (firewall/rota), " +
+                    "se o FastAPI está no ar e se o CORS da API inclui Private Network Access quando aplicável (Chrome → IP privado). " +
+                    "Quando no futuro o site for HTTPS, a API também precisará ser HTTPS ou o mesmo host — senão há bloqueio de conteúdo misto.",
             );
         }
         throw error;
