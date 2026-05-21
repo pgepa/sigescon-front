@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jwtDecode } from "jwt-decode";
+import { redirectToLogin } from "@/utils/spaNavigation";
 
 // --- CONFIGURAÇÃO DA API ---
 const API_URL = import.meta.env.VITE_API_URL;
@@ -255,7 +256,7 @@ async function refreshTokenIfNeeded(): Promise<void> {
                 console.error('❌ Erro ao renovar token automaticamente:', error);
                 console.log('🚪 Fazendo logout devido à falha na renovação');
                 tokenManager.removeToken();
-                window.location.href = '/login';
+                redirectToLogin();
             }
         }
     }

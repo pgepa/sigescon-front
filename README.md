@@ -85,3 +85,28 @@ Quando migrar para **HTTPS** no site, a API também deve ser HTTPS (ou servida n
 
 - **`VITE_API_URL`**: base dos endpoints REST (`/usuarios`, `/contratos`, …).
 - **`VITE_AUTH_API_URL`**: base das rotas `/auth/*` (login, contexto, logout). Com o sigescon-fastapi atual, use em geral a **mesma** base terminando em `/api/v1`.
+
+### Rotas ao atualizar a página (F5) — Apache sem fallback
+
+Um **404 ao dar F5** em `/dashboard` vem do **Apache** (`GET /dashboard` antes de rodar React), não da tabela de rotas do React.
+
+Este projeto está com **`createHashRouter`**, então na prática você usa **`http://servidor/#/dashboard`**; o primeiro pedido ao servidor é sempre **`GET /`** e **F5** funciona mesmo sem **`.htaccess`**.
+
+Para **URLs sem `#`** (`/dashboard`), troque em **`routes.tsx`** para **`createBrowserRouter`** e configure o servidor como abaixo.
+
+### Deploy em Apache (URLs estilo `/dashboard` sem `#`)
+
+Nesse modo (**`createBrowserRouter`**), ao abrir **`/dashboard`** o Apache precisa entregar **`index.html`**.
+
+Após **`npm run build`**, copie o conteúdo de **`dist/`** (inclusive **`.htaccess`**, gerado a partir de `public/.htaccess`) para o diretório do site.
+
+No **VirtualHost** ou **`Directory`**, garanta **`AllowOverride FileInfo`** (ou **`All`**) para o `.htaccess` valer — ou configure sem `.htaccess`:
+
+```apache
+<Directory "/var/www/sigescon">
+    AllowOverride None
+    FallbackResource /index.html
+</Directory>
+```
+
+Com **`mod_rewrite`** desabilitado use **`FallbackResource /index.html`** como acima (`mod_rewrite` não é obrigatório nesse modo).

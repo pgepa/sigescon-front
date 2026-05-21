@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createHashRouter } from 'react-router-dom';
 import AppLayout from '@/_layouts/app';
 import { AuthLayout } from '@/_layouts/auth';
 
@@ -30,7 +30,9 @@ import LogsAuditoria from '@/pages/admin/LogsAuditoria';
 // Componente para dashboard dinâmico baseado no perfil
 import DashboardRouter from '@/components/DashboardRouter';
 
-export const router = createBrowserRouter([
+// Hash routing: atualizar (F5) continua válido mesmo sem FallbackResource / `.htaccess` no Apache,
+// porque o pedido HTTP é sempre `GET /` e a rota fica em `#/dashboard`.
+export const router = createHashRouter([
   // Rotas públicas
   {
     element: <AuthLayout />,
