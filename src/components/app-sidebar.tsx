@@ -8,6 +8,7 @@ import {
   IconClipboardList,
   IconAlertTriangle,
   IconSettings,
+  IconReportAnalytics,
 } from "@tabler/icons-react"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -69,6 +70,11 @@ const getNavigationByProfile = (perfilNome: string) => {
           icon: IconAlertTriangle,
         },
         {
+          title: "Relatório Contratos",
+          url: "/relatorio-contratos",
+          icon: IconReportAnalytics,
+        },
+        {
           title: "Administração",
           url: "/administracao",
           icon: IconSettings,
@@ -82,6 +88,11 @@ const getNavigationByProfile = (perfilNome: string) => {
           title: "Contratos",
           url: "/contratos",
           icon: IconFileText,
+        },
+        {
+          title: "Relatório Contratos",
+          url: "/relatorio-contratos",
+          icon: IconReportAnalytics,
         },
       ];
 

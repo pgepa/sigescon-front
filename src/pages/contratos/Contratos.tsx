@@ -20,6 +20,7 @@ import {
     IconUserCheck,
     IconChevronDown,
     IconPencil,
+    IconDownload,
 } from "@tabler/icons-react";
 import {
     type ColumnDef,
@@ -52,6 +53,8 @@ import {
     createTermoAditivo,
     updateTermoAditivo,
     deleteTermoAditivo,
+    uploadArquivoAditivo,
+    downloadArquivoContrato,
     type Contratado,
     type Status,
     type User,
@@ -1155,6 +1158,8 @@ export function ContratosDataTable() {
     const [mostrarFormAditivo, setMostrarFormAditivo] = React.useState<Set<number>>(new Set());
     const [editandoAditivo, setEditandoAditivo] = React.useState<Record<number, Partial<TermoAditivoUpdate>>>({});
     const [salvandoEdicaoAditivo, setSalvandoEdicaoAditivo] = React.useState<Set<number>>(new Set());
+    const [arquivoAditivo, setArquivoAditivo] = React.useState<Record<number, File | null>>({});
+    const [arquivoEdicaoAditivo, setArquivoEdicaoAditivo] = React.useState<Record<number, File | null>>({});
 
     const toggleExpandRow = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -1189,6 +1194,15 @@ export function ContratosDataTable() {
         setSalvandoAditivo(prev => new Set(prev).add(contratoId));
         try {
             const criado = await createTermoAditivo(contratoId, dados as TermoAditivoCreate);
+            const arquivo = arquivoAditivo[contratoId];
+            if (arquivo) {
+                try {
+                    await uploadArquivoAditivo(contratoId, criado.id, arquivo);
+                } catch {
+                    toast.error("Termo aditivo criado, mas falha ao enviar o arquivo.");
+                }
+                setArquivoAditivo(prev => { const n = { ...prev }; delete n[contratoId]; return n; });
+            }
             setAditivosMap(prev => ({ ...prev, [contratoId]: [...(prev[contratoId] || []), criado] }));
             setNovoAditivo(prev => { const n = { ...prev }; delete n[contratoId]; return n; });
             setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(contratoId); return n; });
@@ -1200,12 +1214,33 @@ export function ContratosDataTable() {
         }
     };
 
+    const handleDownloadAditivo = async (contratoId: number, ad: TermoAditivo, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!ad.arquivo_id) return;
+        const toastId = `dl-ad-${ad.arquivo_id}`;
+        try {
+            toast.loading("Preparando download…", { id: toastId });
+            const blob = await downloadArquivoContrato(contratoId, ad.arquivo_id);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = ad.arquivo_nome ?? `${ad.numero_aditivo}o_termo_aditivo`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success("Download concluído!", { id: toastId });
+        } catch {
+            toast.error("Erro ao fazer download do arquivo.", { id: toastId });
+        }
+    };
+
     const handleExcluirAditivo = async (contratoId: number, aditivoId: number, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
             await deleteTermoAditivo(contratoId, aditivoId);
-            setAditivosMap(prev => ({ ...prev, [contratoId]: prev[contratoId].filter(a => a.id !== aditivoId) }));
-            toast.success("Termo aditivo excluído.");
+            // Recarrega lista para mostrar o aditivo como inativo
+            const res = await getTermosAditivos(contratoId);
+            setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
+            toast.success("Termo aditivo inativado.");
         } catch {
             toast.error("Erro ao excluir termo aditivo.");
         }
@@ -1219,6 +1254,7 @@ export function ContratosDataTable() {
                 tipo: ad.tipo,
                 objeto: ad.objeto,
                 data_assinatura: ad.data_assinatura,
+                data_publicacao: ad.data_publicacao ?? undefined,
                 nova_data_fim: ad.nova_data_fim ?? undefined,
                 valor_acrescimo: ad.valor_acrescimo ?? undefined,
                 pae: ad.pae ?? undefined,
@@ -1236,6 +1272,15 @@ export function ContratosDataTable() {
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
         try {
             const atualizado = await updateTermoAditivo(contratoId, aditivoId, dados);
+            const arquivo = arquivoEdicaoAditivo[aditivoId];
+            if (arquivo) {
+                try {
+                    await uploadArquivoAditivo(contratoId, aditivoId, arquivo);
+                } catch {
+                    toast.error("Termo aditivo atualizado, mas falha ao enviar o arquivo.");
+                }
+                setArquivoEdicaoAditivo(prev => { const n = { ...prev }; delete n[aditivoId]; return n; });
+            }
             setAditivosMap(prev => ({
                 ...prev,
                 [contratoId]: prev[contratoId].map(a => a.id === aditivoId ? atualizado : a)
@@ -1588,11 +1633,11 @@ export function ContratosDataTable() {
                                                                         <span className="animate-pulse w-4 text-center">…</span>
                                                                     ) : (
                                                                         <span className={`inline-flex items-center justify-center rounded-full w-5 h-5 text-xs font-bold ${
-                                                                            (aditivosMap[c.id]?.length ?? c.total_aditivos) > 0
+                                                                            (aditivosMap[c.id]?.filter(a => a.ativo !== false).length ?? c.total_aditivos) > 0
                                                                                 ? "bg-indigo-100 text-indigo-700"
                                                                                 : "bg-gray-100 text-gray-500"
                                                                         }`}>
-                                                                            {aditivosMap[c.id]?.length ?? c.total_aditivos}
+                                                                            {aditivosMap[c.id]?.filter(a => a.ativo !== false).length ?? c.total_aditivos}
                                                                         </span>
                                                                     )}
                                                                     <IconChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
@@ -1819,6 +1864,33 @@ export function ContratosDataTable() {
                                                                                         onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
                                                                                     />
                                                                                 </div>
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <label className="text-xs font-medium text-gray-600">Data Publicação</label>
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        className="h-8 text-xs"
+                                                                                        value={novoAditivo[c.id]?.data_publicacao ?? ""}
+                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_publicacao: e.target.value || null } }))}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo</label>
+                                                                                    <label className="flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                                                                                        <IconFileText className="w-4 h-4 shrink-0" />
+                                                                                        <span className="truncate">
+                                                                                            {arquivoAditivo[c.id]?.name ?? "Selecionar arquivo (PDF, DOC…)"}
+                                                                                        </span>
+                                                                                        <input
+                                                                                            type="file"
+                                                                                            className="hidden"
+                                                                                            accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                            onChange={e => {
+                                                                                                const f = e.target.files?.[0] ?? null;
+                                                                                                setArquivoAditivo(prev => ({ ...prev, [c.id]: f }));
+                                                                                            }}
+                                                                                        />
+                                                                                    </label>
+                                                                                </div>
                                                                                 <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
                                                                                     <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
                                                                                     <Input
@@ -1870,29 +1942,62 @@ export function ContratosDataTable() {
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-24">Tipo</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700">Descrição</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Assinatura</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Publicação</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Vigência</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Acréscimo</th>
+                                                                                            <th className="text-center px-3 py-2 font-semibold text-indigo-700 w-20">Arquivo</th>
                                                                                             {canManageAditivos && <th className="w-8 px-3 py-2" />}
                                                                                         </tr>
                                                                                     </thead>
                                                                                     <tbody className="bg-white divide-y divide-indigo-50">
-                                                                                        {[...(aditivosMap[c.id] ?? [])].sort((a, b) => b.numero_aditivo - a.numero_aditivo).map(ad => {
+                                                                                        {[...(aditivosMap[c.id] ?? [])]
+                                                                                            .filter(ad => ad.ativo !== false)
+                                                                                            .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
+                                                                                            .map((ad, idx) => {
                                                                                             const hoje = new Date(); hoje.setHours(0,0,0,0);
                                                                                             const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
-                                                                                            const vigente = ad.ativo !== false && !expirado;
+                                                                                            const vigente = !expirado;
+                                                                                            const numeroExibido = idx + 1;
                                                                                             return (
                                                                                             <React.Fragment key={ad.id}>
-                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-100/70 opacity-70 hover:opacity-90 transition-colors"}>
-                                                                                                <td className="px-3 py-2 font-bold text-indigo-700">{ad.numero_aditivo}º</td>
+                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors"}>
+                                                                                                <td className="px-3 py-2 font-bold text-indigo-700">
+                                                                                                    <div className="flex items-center gap-1.5">
+                                                                                                        <span>{numeroExibido}º</span>
+                                                                                                        {vigente ? (
+                                                                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 uppercase tracking-wide">
+                                                                                                                Ativo
+                                                                                                            </span>
+                                                                                                        ) : (
+                                                                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 uppercase tracking-wide">
+                                                                                                                Vencido
+                                                                                                            </span>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                </td>
                                                                                                 <td className="px-3 py-2">
-                                                                                                    <Badge className="text-xs px-1.5 py-0 bg-indigo-100 text-indigo-800 border-indigo-200 border">
+                                                                                                    <Badge className={`text-xs px-1.5 py-0 border ${vigente ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
                                                                                                         {ad.tipo}
                                                                                                     </Badge>
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2 text-gray-700 max-w-[250px] truncate" title={ad.objeto}>{ad.objeto}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{formatDate(ad.data_assinatura)}</td>
+                                                                                                <td className="px-3 py-2 text-gray-600">{ad.data_publicacao ? formatDate(ad.data_publicacao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
+                                                                                                <td className="px-3 py-2 text-center">
+                                                                                                    {ad.arquivo_id ? (
+                                                                                                        <button
+                                                                                                            onClick={e => handleDownloadAditivo(c.id, ad, e)}
+                                                                                                            className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                                                                                                            title={ad.arquivo_nome ?? "Baixar arquivo"}
+                                                                                                        >
+                                                                                                            <IconDownload className="h-3.5 w-3.5" />
+                                                                                                        </button>
+                                                                                                    ) : (
+                                                                                                        <span className="text-gray-300 text-xs">—</span>
+                                                                                                    )}
+                                                                                                </td>
                                                                                                 {canManageAditivos && (
                                                                                                     <td className="px-3 py-2">
                                                                                                         <div className="flex items-center gap-2">
@@ -1903,20 +2008,20 @@ export function ContratosDataTable() {
                                                                                                             >
                                                                                                                 <IconPencil className="h-3.5 w-3.5" />
                                                                                                             </button>
-                                                                                                            <AlertDialog>
+                                                                                                            {vigente && <AlertDialog>
                                                                                                                 <AlertDialogTrigger asChild>
                                                                                                                     <button
                                                                                                                         onClick={e => e.stopPropagation()}
                                                                                                                         className="text-red-400 hover:text-red-600 transition-colors"
-                                                                                                                        title="Excluir"
+                                                                                                                        title="Inativar"
                                                                                                                     >
                                                                                                                         <IconX className="h-3.5 w-3.5" />
                                                                                                                     </button>
                                                                                                                 </AlertDialogTrigger>
                                                                                                                 <AlertDialogContent onClick={e => e.stopPropagation()}>
                                                                                                                     <AlertDialogHeader>
-                                                                                                                        <AlertDialogTitle>Excluir {ad.numero_aditivo}º Aditivo?</AlertDialogTitle>
-                                                                                                                        <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+                                                                                                                        <AlertDialogTitle>Inativar {ad.numero_aditivo}º Aditivo?</AlertDialogTitle>
+                                                                                                                        <AlertDialogDescription>O termo aditivo será inativado e permanecerá visível na lista.</AlertDialogDescription>
                                                                                                                     </AlertDialogHeader>
                                                                                                                     <AlertDialogFooter>
                                                                                                                         <AlertDialogCancel onClick={e => e.stopPropagation()}>Cancelar</AlertDialogCancel>
@@ -1924,11 +2029,11 @@ export function ContratosDataTable() {
                                                                                                                             className="bg-red-600 hover:bg-red-700"
                                                                                                                             onClick={e => handleExcluirAditivo(c.id, ad.id, e)}
                                                                                                                         >
-                                                                                                                            Excluir
+                                                                                                                            Inativar
                                                                                                                         </AlertDialogAction>
                                                                                                                     </AlertDialogFooter>
                                                                                                                 </AlertDialogContent>
-                                                                                                            </AlertDialog>
+                                                                                                            </AlertDialog>}
                                                                                                         </div>
                                                                                                     </td>
                                                                                                 )}
@@ -2030,6 +2135,33 @@ export function ContratosDataTable() {
                                                                                                                     value={editandoAditivo[ad.id]?.pae ?? ""}
                                                                                                                     onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
                                                                                                                 />
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-col gap-1">
+                                                                                                                <label className="text-xs font-medium text-gray-600">Data Publicação</label>
+                                                                                                                <Input
+                                                                                                                    type="date"
+                                                                                                                    className="h-8 text-xs"
+                                                                                                                    value={editandoAditivo[ad.id]?.data_publicacao ?? ""}
+                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_publicacao: e.target.value || null } }))}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-col gap-1">
+                                                                                                                <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo</label>
+                                                                                                                <label className="flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
+                                                                                                                    <IconFileText className="w-4 h-4 shrink-0" />
+                                                                                                                    <span className="truncate">
+                                                                                                                        {arquivoEdicaoAditivo[ad.id]?.name ?? (ad.arquivo_nome ? `Atual: ${ad.arquivo_nome}` : "Selecionar arquivo (PDF, DOC…)")}
+                                                                                                                    </span>
+                                                                                                                    <input
+                                                                                                                        type="file"
+                                                                                                                        className="hidden"
+                                                                                                                        accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                                                        onChange={e => {
+                                                                                                                            const f = e.target.files?.[0] ?? null;
+                                                                                                                            setArquivoEdicaoAditivo(prev => ({ ...prev, [ad.id]: f }));
+                                                                                                                        }}
+                                                                                                                    />
+                                                                                                                </label>
                                                                                                             </div>
                                                                                                             <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
                                                                                                                 <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>

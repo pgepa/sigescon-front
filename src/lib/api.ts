@@ -314,6 +314,8 @@ async function api<T>(endpoint: string, options?: RequestInit, useAuthUrl: boole
 }
 
 async function apiBlob(endpoint: string, options?: RequestInit, useAuthUrl: boolean = false): Promise<Blob> {
+    await refreshTokenIfNeeded();
+
     const baseUrl = useAuthUrl ? AUTH_API_URL : API_URL;
     const { token, type } = tokenManager.getTokenData();
     const headers = new Headers(options?.headers);
@@ -322,10 +324,14 @@ async function apiBlob(endpoint: string, options?: RequestInit, useAuthUrl: bool
         headers.set('Authorization', `${type} ${token}`);
     }
 
-    const response = await fetch(`${baseUrl}${endpoint}`, { ...options, headers });
+    const fullUrl = `${baseUrl}${endpoint}`;
+    console.log('📥 Download:', fullUrl);
+
+    const response = await fetch(fullUrl, { ...options, headers });
 
     if (!response.ok) {
-        throw new Error(`Erro no download: ${response.statusText}`);
+        console.error('❌ Erro no download:', response.status, response.statusText, fullUrl);
+        throw new Error(`Erro no download: ${response.status} ${response.statusText}`);
     }
     return response.blob();
 }
@@ -648,7 +654,7 @@ export const relatorioSchema = z.object({ id: z.number(), descricao: z.string(),
 export type Relatorio = z.infer<typeof relatorioSchema>;
 export const pendenciaSchema = z.object({ id: z.number(), contrato_id: z.number(), descricao: z.string(), data_prazo: z.string(), status_pendencia_id: z.number(), criado_por_usuario_id: z.number(), status_nome: z.string().optional(), criado_por_nome: z.string().optional() });
 
-export type Contrato = { id: number; nr_contrato: string; objeto: string; valor_anual: number | null; valor_global: number | null; data_inicio: string; data_fim: string; contratado_id: number; modalidade_id: number; status_id: number; gestor_id: number; fiscal_id: number; fiscal_substituto_id: number | null; pae: string | null; doe: string | null; data_doe: string | null; garantia: string | null; modalidade_nome?: string; contratado_nome?: string; status_nome?: string; gestor_nome?: string; fiscal_nome?: string; fiscal_substituto_nome?: string; };
+export type Contrato = { id: number; nr_contrato: string; objeto: string; valor_anual: number | null; valor_global: number | null; data_inicio: string; data_fim: string; contratado_id: number; modalidade_id: number; status_id: number; gestor_id: number; fiscal_id: number; fiscal_substituto_id: number | null; pae: string | null; doe: string | null; data_doe: string | null; garantia: string | null; base_legal?: string | null; termos_contratuais?: string | null; modalidade_nome?: string; contratado_nome?: string; status_nome?: string; gestor_nome?: string; fiscal_nome?: string; fiscal_substituto_nome?: string; };
 export type ContratoDetalhado = Contrato & { arquivos?: Arquivo[]; relatorios?: Relatorio[]; pendencias?: Pendencia[]; contratado?: { nome: string; cnpj: string; cpf: string; }; };
 export type ContratosApiResponse = { data: Contrato[]; total_items: number; total_pages: number; current_page: number; per_page: number; };
 
@@ -1094,6 +1100,7 @@ export type ArquivosResponse = {
         tipo_arquivo: string;
         tamanho_bytes: number;
         contrato_id: number;
+        tipo_vinculo: 'contrato' | 'termo_aditivo' | 'relatorio' | string;
         created_at: string;
     }[];
     total_arquivos: number;
@@ -1123,6 +1130,16 @@ export async function getArquivosByContratoId(contratoId: number): Promise<Arqui
 export function deleteArquivoContrato(contratoId: number, arquivoId: number): Promise<void> {
     return api<void>(`/contratos/${contratoId}/arquivos/${arquivoId}`, {
         method: 'DELETE',
+    });
+}
+
+export function uploadArquivoContrato(contratoId: number, file: File, descricao?: string): Promise<{ id: number; nome_arquivo: string }> {
+    const fd = new FormData();
+    fd.append('documento_contrato', file);
+    if (descricao) fd.append('descricao', descricao);
+    return api<{ id: number; nome_arquivo: string }>(`/contratos/${contratoId}/arquivos/`, {
+        method: 'POST',
+        body: fd,
     });
 }
 
@@ -2755,6 +2772,23 @@ export async function updateTermoAditivo(
     return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
         method: "PATCH",
         body: JSON.stringify(dados),
+    });
+}
+
+/**
+ * Faz upload de arquivo vinculado a um termo aditivo
+ * POST /api/v1/contratos/{id}/aditivos/{aditivo_id}/arquivo
+ */
+export async function uploadArquivoAditivo(
+    contratoId: number,
+    aditivoId: number,
+    file: File,
+): Promise<TermoAditivo> {
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}/arquivo`, {
+        method: 'POST',
+        body: fd,
     });
 }
 

@@ -21,6 +21,7 @@ import { FiscalContratos } from '@/pages/fiscal/FiscalContratos';
 import { GestorDashboard } from '@/pages/gestor/GestorDashboard';
 import EnviarRelatorio from '@/pages/fiscal/EnviarRelatorio';
 import Relatorios from '@/pages/relatorios/Relatorios';
+import RelatorioContratos from '@/pages/relatorios/RelatorioContratos';
 import { AnalisarRelatoriosNovo } from '@/pages/admin/AnalisarRelatoriosNovo';
 import Fiscalizacao from '@/pages/fiscalizacao/Fiscalizacao';
 import GestaoPendenciasVencidas from '@/pages/pendencias/GestaoPendenciasVencidas';
@@ -33,6 +34,13 @@ import DashboardRouter from '@/components/DashboardRouter';
 // Hash routing: atualizar (F5) continua válido mesmo sem FallbackResource / `.htaccess` no Apache,
 // porque o pedido HTTP é sempre `GET /` e a rota fica em `#/dashboard`.
 export const router = createHashRouter([
+  // Rota pública sem layout (acesso direto sem login)
+  {
+    path: '/relatorio-contratos',
+    element: <RelatorioContratos />,
+    errorElement: <NotFound />,
+  },
+
   // Rotas públicas
   {
     element: <AuthLayout />,
@@ -154,7 +162,6 @@ export const router = createHashRouter([
         path: '/configuracoes',
         element: <ProtectedRoute requiredProfiles={['Administrador']}><div>Página de Configurações</div></ProtectedRoute>,
       },
-      // Rota catch-all para debug
       {
         path: '*',
         element: <NotFound />,
