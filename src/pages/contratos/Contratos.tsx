@@ -21,6 +21,7 @@ import {
     IconChevronDown,
     IconPencil,
     IconDownload,
+    IconUpload,
 } from "@tabler/icons-react";
 import {
     type ColumnDef,
@@ -1108,6 +1109,13 @@ function gerarDescricaoAditivo(
             : "—";
         return `Aditamento de valor - Acréscimo de R$ ${val}`;
     }
+    if (tipo === "Misto") {
+        const val = valorAcrescimo != null
+            ? valorAcrescimo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            : "—";
+        const fim = novaDataFim ? fmt(novaDataFim) : "—";
+        return `Aditamento de valor e prazo - Acréscimo de R$ ${val} - Nova data fim: ${fim}`;
+    }
     return "";
 }
 
@@ -1160,6 +1168,7 @@ export function ContratosDataTable() {
     const [salvandoEdicaoAditivo, setSalvandoEdicaoAditivo] = React.useState<Set<number>>(new Set());
     const [arquivoAditivo, setArquivoAditivo] = React.useState<Record<number, File | null>>({});
     const [arquivoEdicaoAditivo, setArquivoEdicaoAditivo] = React.useState<Record<number, File | null>>({});
+    const [uploadandoAditivo, setUploadandoAditivo] = React.useState<Set<number>>(new Set());
 
     const toggleExpandRow = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -1203,7 +1212,9 @@ export function ContratosDataTable() {
                 }
                 setArquivoAditivo(prev => { const n = { ...prev }; delete n[contratoId]; return n; });
             }
-            setAditivosMap(prev => ({ ...prev, [contratoId]: [...(prev[contratoId] || []), criado] }));
+            // Recarrega do servidor para obter arquivo_id atualizado
+            const res = await getTermosAditivos(contratoId);
+            setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
             setNovoAditivo(prev => { const n = { ...prev }; delete n[contratoId]; return n; });
             setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(contratoId); return n; });
             toast.success(`${criado.numero_aditivo}º Termo Aditivo criado com sucesso!`);
@@ -1211,6 +1222,20 @@ export function ContratosDataTable() {
             toast.error("Erro ao criar termo aditivo.");
         } finally {
             setSalvandoAditivo(prev => { const n = new Set(prev); n.delete(contratoId); return n; });
+        }
+    };
+
+    const handleUploadArquivoAditivo = async (contratoId: number, aditivoId: number, file: File) => {
+        setUploadandoAditivo(prev => new Set(prev).add(aditivoId));
+        try {
+            await uploadArquivoAditivo(contratoId, aditivoId, file);
+            const res = await getTermosAditivos(contratoId);
+            setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
+            toast.success("Arquivo enviado com sucesso!");
+        } catch {
+            toast.error("Erro ao enviar o arquivo.");
+        } finally {
+            setUploadandoAditivo(prev => { const n = new Set(prev); n.delete(aditivoId); return n; });
         }
     };
 
@@ -1281,10 +1306,9 @@ export function ContratosDataTable() {
                 }
                 setArquivoEdicaoAditivo(prev => { const n = { ...prev }; delete n[aditivoId]; return n; });
             }
-            setAditivosMap(prev => ({
-                ...prev,
-                [contratoId]: prev[contratoId].map(a => a.id === aditivoId ? atualizado : a)
-            }));
+            // Recarrega do servidor para obter arquivo_id atualizado
+            const res = await getTermosAditivos(contratoId);
+            setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
             setEditandoAditivo(prev => { const n = { ...prev }; delete n[aditivoId]; return n; });
             toast.success("Termo aditivo atualizado com sucesso!");
         } catch {
@@ -1558,10 +1582,34 @@ export function ContratosDataTable() {
                                     <TableHeader>
                                         <TableRow className="bg-gray-50 hover:bg-gray-50">
                                             <TableHead className="w-[110px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</TableHead>
-                                            <TableHead className="w-[120px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Nº Contrato</TableHead>
+                                            <TableHead
+                                                className="w-[120px] text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                                                onClick={table.getColumn("nr_contrato")?.getToggleSortingHandler()}
+                                            >
+                                                <span className="flex items-center gap-1">
+                                                    Nº Contrato
+                                                    {table.getColumn("nr_contrato")?.getIsSorted() === "asc" ? " ↑" : table.getColumn("nr_contrato")?.getIsSorted() === "desc" ? " ↓" : " ↕"}
+                                                </span>
+                                            </TableHead>
                                             <TableHead className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Objeto</TableHead>
-                                            <TableHead className="w-[200px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Contratado</TableHead>
-                                            <TableHead className="w-[100px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Data Fim</TableHead>
+                                            <TableHead
+                                                className="w-[200px] text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                                                onClick={table.getColumn("contratado_nome")?.getToggleSortingHandler()}
+                                            >
+                                                <span className="flex items-center gap-1">
+                                                    Contratado
+                                                    {table.getColumn("contratado_nome")?.getIsSorted() === "asc" ? " ↑" : table.getColumn("contratado_nome")?.getIsSorted() === "desc" ? " ↓" : " ↕"}
+                                                </span>
+                                            </TableHead>
+                                            <TableHead
+                                                className="w-[100px] text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                                                onClick={table.getColumn("data_fim")?.getToggleSortingHandler()}
+                                            >
+                                                <span className="flex items-center gap-1">
+                                                    Data Fim
+                                                    {table.getColumn("data_fim")?.getIsSorted() === "asc" ? " ↑" : table.getColumn("data_fim")?.getIsSorted() === "desc" ? " ↓" : " ↕"}
+                                                </span>
+                                            </TableHead>
                                             <TableHead className="w-[100px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Aditivos</TableHead>
                                             <TableHead className="w-[80px] text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Ações</TableHead>
                                         </TableRow>
@@ -1787,7 +1835,7 @@ export function ContratosDataTable() {
                                                                                     >
                                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                         <SelectContent>
-                                                                                            {["Prazo", "Valor"].map(t => (
+                                                                                            {["Prazo", "Valor", "Misto"].map(t => (
                                                                                                 <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
                                                                                             ))}
                                                                                         </SelectContent>
@@ -1994,8 +2042,26 @@ export function ContratosDataTable() {
                                                                                                         >
                                                                                                             <IconDownload className="h-3.5 w-3.5" />
                                                                                                         </button>
+                                                                                                    ) : uploadandoAditivo.has(ad.id) ? (
+                                                                                                        <span className="text-indigo-400 text-xs animate-pulse">…</span>
                                                                                                     ) : (
-                                                                                                        <span className="text-gray-300 text-xs">—</span>
+                                                                                                        <label
+                                                                                                            className="cursor-pointer text-gray-400 hover:text-indigo-500 transition-colors"
+                                                                                                            title="Anexar arquivo"
+                                                                                                            onClick={e => e.stopPropagation()}
+                                                                                                        >
+                                                                                                            <IconUpload className="h-3.5 w-3.5" />
+                                                                                                            <input
+                                                                                                                type="file"
+                                                                                                                className="hidden"
+                                                                                                                accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                                                onChange={e => {
+                                                                                                                    const f = e.target.files?.[0];
+                                                                                                                    if (f) handleUploadArquivoAditivo(c.id, ad.id, f);
+                                                                                                                    e.target.value = "";
+                                                                                                                }}
+                                                                                                            />
+                                                                                                        </label>
                                                                                                     )}
                                                                                                 </td>
                                                                                                 {canManageAditivos && (
@@ -2063,6 +2129,7 @@ export function ContratosDataTable() {
                                                                                                                     <SelectContent>
                                                                                                                         <SelectItem value="Prazo">Prazo</SelectItem>
                                                                                                                         <SelectItem value="Valor">Valor</SelectItem>
+                                                                                                                        <SelectItem value="Misto">Misto (Valor + Prazo)</SelectItem>
                                                                                                                     </SelectContent>
                                                                                                                 </Select>
                                                                                                             </div>
