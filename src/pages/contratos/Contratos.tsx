@@ -52,7 +52,7 @@ import {
     criarPendenciasAutomaticas as criarPendenciasAutomaticasAPI,
     getTermosAditivos,
     createTermoAditivo,
-    updateTermoAditivo,
+   // updateTermoAditivo,
     deleteTermoAditivo,
     uploadArquivoAditivo,
     downloadArquivoContrato,
