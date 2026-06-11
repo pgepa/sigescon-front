@@ -1296,7 +1296,7 @@ export function ContratosDataTable() {
         }
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
         try {
-            const atualizado = await updateTermoAditivo(contratoId, aditivoId, dados);
+            // const atualizado = await updateTermoAditivo(contratoId, aditivoId, dados);
             const arquivo = arquivoEdicaoAditivo[aditivoId];
             if (arquivo) {
                 try {
