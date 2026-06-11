@@ -1168,7 +1168,6 @@ export function ContratosDataTable() {
     const [salvandoEdicaoAditivo, setSalvandoEdicaoAditivo] = React.useState<Set<number>>(new Set());
     const [arquivoAditivo, setArquivoAditivo] = React.useState<Record<number, File | null>>({});
     const [arquivoEdicaoAditivo, setArquivoEdicaoAditivo] = React.useState<Record<number, File | null>>({});
-    const [uploadandoAditivo, setUploadandoAditivo] = React.useState<Set<number>>(new Set());
 
     const toggleExpandRow = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -1226,16 +1225,15 @@ export function ContratosDataTable() {
     };
 
     const handleUploadArquivoAditivo = async (contratoId: number, aditivoId: number, file: File) => {
-        setUploadandoAditivo(prev => new Set(prev).add(aditivoId));
+        const toastId = `up-ad-${aditivoId}`;
         try {
+            toast.loading("Enviando arquivo…", { id: toastId });
             await uploadArquivoAditivo(contratoId, aditivoId, file);
             const res = await getTermosAditivos(contratoId);
             setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
-            toast.success("Arquivo enviado com sucesso!");
+            toast.success("Arquivo anexado!", { id: toastId });
         } catch {
-            toast.error("Erro ao enviar o arquivo.");
-        } finally {
-            setUploadandoAditivo(prev => { const n = new Set(prev); n.delete(aditivoId); return n; });
+            toast.error("Erro ao enviar o arquivo.", { id: toastId });
         }
     };
 
@@ -2042,16 +2040,18 @@ export function ContratosDataTable() {
                                                                                                         >
                                                                                                             <IconDownload className="h-3.5 w-3.5" />
                                                                                                         </button>
-                                                                                                    ) : uploadandoAditivo.has(ad.id) ? (
-                                                                                                        <span className="text-indigo-400 text-xs animate-pulse">…</span>
                                                                                                     ) : (
-                                                                                                        <label
-                                                                                                            className="cursor-pointer text-gray-400 hover:text-indigo-500 transition-colors"
-                                                                                                            title="Anexar arquivo"
-                                                                                                            onClick={e => e.stopPropagation()}
-                                                                                                        >
-                                                                                                            <IconUpload className="h-3.5 w-3.5" />
+                                                                                                        <>
+                                                                                                            <label
+                                                                                                                htmlFor={`upload-aditivo-${ad.id}`}
+                                                                                                                className="cursor-pointer inline-flex items-center justify-center text-gray-400 hover:text-indigo-600 transition-colors"
+                                                                                                                title="Anexar arquivo do termo aditivo"
+                                                                                                                onClick={e => e.stopPropagation()}
+                                                                                                            >
+                                                                                                                <IconUpload className="h-3.5 w-3.5" />
+                                                                                                            </label>
                                                                                                             <input
+                                                                                                                id={`upload-aditivo-${ad.id}`}
                                                                                                                 type="file"
                                                                                                                 className="hidden"
                                                                                                                 accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
@@ -2061,7 +2061,7 @@ export function ContratosDataTable() {
                                                                                                                     e.target.value = "";
                                                                                                                 }}
                                                                                                             />
-                                                                                                        </label>
+                                                                                                        </>
                                                                                                     )}
                                                                                                 </td>
                                                                                                 {canManageAditivos && (
