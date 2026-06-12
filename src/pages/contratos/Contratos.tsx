@@ -55,7 +55,7 @@ import {
    // updateTermoAditivo,
     deleteTermoAditivo,
     uploadArquivoAditivo,
-    downloadArquivoContrato,
+    //downloadArquivoContrato,
     downloadArquivoAditivo,
     type Contratado,
     type Status,
@@ -1238,7 +1238,7 @@ export function ContratosDataTable() {
         }
     };
 
-    const handleDownloadAditivo = async (contratoId: number, ad: TermoAditivo, e: React.MouseEvent) => {
+    const handleDownloadAditivo = async (ad: TermoAditivo, e: React.MouseEvent) => {
         e.stopPropagation();
         if (!ad.arquivo_id) return;
         const toastId = `dl-ad-${ad.arquivo_id}`;
@@ -2035,7 +2035,7 @@ export function ContratosDataTable() {
                                                                                                 <td className="px-3 py-2 text-center">
                                                                                                     {ad.arquivo_id ? (
                                                                                                         <button
-                                                                                                            onClick={e => handleDownloadAditivo(c.id, ad, e)}
+                                                                                                            onClick={e => handleDownloadAditivo(ad, e)}
                                                                                                             className="text-indigo-500 hover:text-indigo-700 transition-colors"
                                                                                                             title={ad.arquivo_nome ?? "Baixar arquivo"}
                                                                                                         >
