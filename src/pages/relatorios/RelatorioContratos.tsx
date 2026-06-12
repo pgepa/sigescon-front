@@ -6,7 +6,7 @@ import { ptBR } from "date-fns/locale";
 
 import {
   getContratos, getContratados, getStatus,
-  getTermosAditivos, getArquivosByContratoId, downloadArquivoContrato,
+  getTermosAditivos, getArquivosByContratoId, downloadArquivoContrato, downloadArquivoAditivo,
   getContratoDetalhado,
   type Contrato, type Contratado, type Status, type TermoAditivo,
 } from "@/lib/api";
@@ -87,7 +87,7 @@ function ModalDetalhes({
     const id = `dl-ad-${arquivoId}`;
     try {
       toast.loading("Preparando download…", { id });
-      const blob = await downloadArquivoContrato(detalhes.id, arquivoId);
+      const blob = await downloadArquivoAditivo(arquivoId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `${ordinal(aditivoNum)}_termo_aditivo`;

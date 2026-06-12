@@ -56,6 +56,7 @@ import {
     deleteTermoAditivo,
     uploadArquivoAditivo,
     downloadArquivoContrato,
+    downloadArquivoAditivo,
     type Contratado,
     type Status,
     type User,
@@ -1243,7 +1244,7 @@ export function ContratosDataTable() {
         const toastId = `dl-ad-${ad.arquivo_id}`;
         try {
             toast.loading("Preparando download…", { id: toastId });
-            const blob = await downloadArquivoContrato(contratoId, ad.arquivo_id);
+            const blob = await downloadArquivoAditivo(ad.arquivo_id);
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;

@@ -801,6 +801,11 @@ export function downloadArquivoContrato(contratoId: number, arquivoId: number): 
     return apiBlob(`/contratos/${contratoId}/arquivos/${arquivoId}/download`);
 }
 
+// Download de arquivo de termo aditivo — usa endpoint direto pelo arquivo_id
+export function downloadArquivoAditivo(arquivoId: number): Promise<Blob> {
+    return apiBlob(`/arquivos/${arquivoId}/download`);
+}
+
 export type StatusPendencia = {
     id: number;
     nome: string;
