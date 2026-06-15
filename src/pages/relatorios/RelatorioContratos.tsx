@@ -178,11 +178,11 @@ function ModalDetalhes({
           {/* Termos Aditivos */}
           <div>
             <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider">
-              Termos Aditivos ({aditivos.length})
+              Termos Aditivos ({aditivos.filter(a => a.ativo !== false).length})
             </h3>
             {loading ? (
               <p className="text-xs text-gray-400 italic">Carregando…</p>
-            ) : aditivos.length === 0 ? (
+            ) : aditivos.filter(a => a.ativo !== false).length === 0 ? (
               <p className="text-xs text-gray-400 italic">Nenhum termo aditivo cadastrado.</p>
             ) : (
               <div className="rounded border border-indigo-100 overflow-hidden">
@@ -199,9 +199,12 @@ function ModalDetalhes({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-indigo-50 bg-white">
-                    {[...aditivos].sort((a, b) => a.numero_aditivo - b.numero_aditivo).map(ad => (
+                    {[...aditivos]
+                      .filter(a => a.ativo !== false)
+                      .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
+                      .map((ad, idx) => (
                       <tr key={ad.id} className="hover:bg-indigo-50/30">
-                        <td className="px-3 py-2 font-bold text-indigo-700">{ordinal(ad.numero_aditivo)} Termo Aditivo</td>
+                        <td className="px-3 py-2 font-bold text-indigo-700">{ordinal(idx + 1)} Termo Aditivo</td>
                         <td className="px-3 py-2">{ad.tipo}</td>
                         <td className="px-3 py-2 max-w-[180px] truncate" title={ad.objeto}>{ad.objeto}</td>
                         <td className="px-3 py-2">{fmtData(ad.data_assinatura)}</td>
