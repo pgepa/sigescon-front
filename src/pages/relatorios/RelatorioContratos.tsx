@@ -550,7 +550,7 @@ export default function RelatorioContratos() {
                         <td className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">{c.modalidade_nome || <span className="text-gray-400">—</span>}</td>
                         <td className="px-3 py-2 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_inicio)}</td>
                         <td className="px-3 py-2 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_fim)}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">{c.termos_contratuais || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-3 py-2 border-r border-gray-100 max-w-[250px] truncate" title={c.termos_contratuais || ""}>{c.termos_contratuais || <span className="text-gray-400">—</span>}</td>
                         <td className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">
                           <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold
                             ${(c.status_nome ?? "").toLowerCase().includes("ativ") ? "bg-green-100 text-green-800" :
