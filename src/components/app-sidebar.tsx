@@ -9,6 +9,7 @@ import {
   IconAlertTriangle,
   IconSettings,
   IconReportAnalytics,
+  IconUserCheck,
 } from "@tabler/icons-react"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -68,6 +69,11 @@ const getNavigationByProfile = (perfilNome: string) => {
           title: "Gestão de Pendências",
           url: "/gestao-de-pendencias",
           icon: IconAlertTriangle,
+        },
+        {
+          title: "Gestão de Responsáveis",
+          url: "/gestao-responsaveis",
+          icon: IconUserCheck,
         },
         {
           title: "Relatório Contratos",
