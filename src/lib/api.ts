@@ -313,6 +313,22 @@ async function api<T>(endpoint: string, options?: RequestInit, useAuthUrl: boole
     }
 }
 
+// Chamada pública — sem token de autenticação
+async function publicApi<T>(endpoint: string): Promise<T> {
+    const fullUrl = `${API_URL}${endpoint}`;
+    const response = await fetch(fullUrl, {
+        headers: { Accept: "application/json" },
+    });
+    return handleResponse<T>(response);
+}
+
+async function publicApiBlob(endpoint: string): Promise<Blob> {
+    const fullUrl = `${API_URL}${endpoint}`;
+    const response = await fetch(fullUrl);
+    if (!response.ok) throw new Error(`Erro ${response.status}`);
+    return response.blob();
+}
+
 async function apiBlob(endpoint: string, options?: RequestInit, useAuthUrl: boolean = false): Promise<Blob> {
     await refreshTokenIfNeeded();
 
@@ -2808,4 +2824,125 @@ export async function deleteTermoAditivo(
     return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
         method: "DELETE",
     });
+}
+
+// ============================================================================
+// GESTÃO DE RESPONSÁVEIS DO CONTRATO
+// ============================================================================
+
+export type ContratoResponsavel = {
+    id: number;
+    contrato_id: number;
+    usuario_id: number;
+    tipo: string;
+    data_inicio: string;
+    data_fim: string | null;
+    portaria: string | null;
+    usuario_nome: string | null;
+    contrato_nr: string | null;
+    criado_por_nome: string | null;
+    created_at: string | null;
+};
+
+export type RelatorioResponsaveisItem = {
+    contrato_id: number;
+    nr_contrato: string;
+    objeto: string;
+    data_inicio: string | null;
+    data_fim: string | null;
+    status_nome: string | null;
+    gestor_atual_nome: string | null;
+    gestor_atual_id: number | null;
+    fiscal_atual_nome: string | null;
+    fiscal_atual_id: number | null;
+    fiscal_substituto_atual_nome: string | null;
+    fiscal_substituto_atual_id: number | null;
+};
+
+export type RelatorioResponsaveisPaginated = {
+    data: RelatorioResponsaveisItem[];
+    total_items: number;
+    total_pages: number;
+    current_page: number;
+    per_page: number;
+};
+
+export type ArquivoPortaria = {
+    id: number;
+    nome_arquivo: string;
+    tipo_arquivo: string | null;
+    tamanho_bytes: number | null;
+    contrato_id: number;
+    created_at: string | null;
+};
+
+export function getRelatorioResponsaveis(
+    filters: Record<string, any>
+): Promise<RelatorioResponsaveisPaginated> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return api<RelatorioResponsaveisPaginated>(`/contratos/relatorio/responsaveis?${params.toString()}`);
+}
+
+export function getResponsaveisContrato(
+    contratoId: number, tipo?: string, apenasAtuais?: boolean
+): Promise<{ responsaveis: ContratoResponsavel[]; total: number; contrato_id: number }> {
+    const params = new URLSearchParams();
+    if (tipo) params.append('tipo', tipo);
+    if (apenasAtuais) params.append('apenas_atuais', 'true');
+    return api(`/contratos/${contratoId}/responsaveis?${params.toString()}`);
+}
+
+export function getArquivosPortaria(
+    contratoId: number
+): Promise<{ arquivos_portaria: ArquivoPortaria[]; total_arquivos: number; contrato_id: number }> {
+    return api(`/arquivos/portaria/contrato/${contratoId}`);
+}
+
+export function downloadArquivoPortaria(arquivoId: number): Promise<Blob> {
+    return apiBlob(`/arquivos/${arquivoId}/download`);
+}
+
+// ============================================================================
+// FUNÇÕES PÚBLICAS — Relatório de Contratos (sem autenticação)
+// ============================================================================
+
+export function publicGetContratos(filters: Record<string, any>): Promise<ContratosApiResponse> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return publicApi<ContratosApiResponse>(`/public/contratos?${params.toString()}`);
+}
+
+export function publicGetContratoDetalhado(id: number): Promise<ContratoDetalhado> {
+    return publicApi<ContratoDetalhado>(`/public/contratos/${id}`);
+}
+
+export function publicGetArquivosByContratoId(contratoId: number): Promise<ArquivosResponse> {
+    return publicApi<ArquivosResponse>(`/public/contratos/${contratoId}/arquivos`).catch(() => ({
+        arquivos: [], total_arquivos: 0, contrato_id: contratoId,
+    }));
+}
+
+export function publicGetTermosAditivos(contratoId: number): Promise<{ data: TermoAditivo[] }> {
+    return publicApi<{ data: TermoAditivo[] }>(`/public/contratos/${contratoId}/aditivos`).catch(() => ({ data: [] }));
+}
+
+export function publicDownloadArquivo(arquivoId: number): Promise<Blob> {
+    return publicApiBlob(`/public/arquivos/${arquivoId}/download`);
+}
+
+export function publicGetStatus(): Promise<Status[]> {
+    return publicApi<Status[]>(`/public/status`).catch(() => []);
+}
+
+export function publicGetContratados(): Promise<{ data: Contratado[]; total: number }> {
+    return publicApi<{ data: Contratado[]; total: number }>(`/public/contratados`).catch(() => ({ data: [], total: 0 }));
 }

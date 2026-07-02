@@ -43,8 +43,8 @@ const contractSchema = z.object({
     contratado_id: z.string().min(1, "Contratado é obrigatório"),
     modalidade_id: z.string().min(1, "Modalidade é obrigatória"),
     status_id: z.string().min(1, "Status é obrigatório"),
-    gestor_id: z.string().min(1, "Gestor é obrigatório"),
-    fiscal_id: z.string().min(1, "Fiscal é obrigatório"),
+    gestor_id: z.string().optional(),
+    fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
     valor_anual: z.string().optional().refine(
         (val) => !val || val === "" || parseFloat(val) >= 0,
@@ -692,7 +692,7 @@ export function EditarContrato() {
                     {errors.contratado_id && <p className="text-red-500 text-sm">{errors.contratado_id.message}</p>}
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Gestor *</label>
+                    <label className="font-medium">Gestor</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosGestores}
@@ -707,7 +707,7 @@ export function EditarContrato() {
                     {errors.gestor_id && <p className="text-red-500 text-sm">{errors.gestor_id.message}</p>}
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Fiscal *</label>
+                    <label className="font-medium">Fiscal</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosFiscais}

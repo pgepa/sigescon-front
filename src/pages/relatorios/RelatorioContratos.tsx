@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 import {
-  getContratos, getContratados, getStatus,
-  getTermosAditivos, getArquivosByContratoId, downloadArquivoContrato, downloadArquivoAditivo,
-  getContratoDetalhado,
+  publicGetContratos,
+  publicGetContratoDetalhado,
+  publicGetArquivosByContratoId,
+  publicGetTermosAditivos,
+  publicDownloadArquivo,
+  publicGetStatus,
+  publicGetContratados,
   type Contrato, type Contratado, type Status, type TermoAditivo,
 } from "@/lib/api";
 import brasaoPara from "@/assets/logo.svg";
@@ -39,7 +42,17 @@ type ArquivoItem = {
   tipo: string;
   tamanho: number;
   data_upload: string;
+  tipo_vinculo: string;
 };
+
+const TIPO_VINCULO_LABEL: Record<string, string> = {
+  contrato:       "Arquivos do Contrato",
+  portaria:       "Portarias de Designação",
+  ata:            "Atas de Registro de Preço",
+  termo_aditivo:  "Arquivos de Termos Aditivos",
+};
+
+const TIPO_VINCULO_ORDER = ["contrato", "portaria", "ata", "termo_aditivo"];
 
 // ── modal de detalhes ────────────────────────────────────────────────────────
 
@@ -60,9 +73,9 @@ function ModalDetalhes({
     setLoading(true);
 
     Promise.all([
-      getContratoDetalhado(contrato.id).catch(() => null),
-      getTermosAditivos(contrato.id).catch(() => ({ data: [] })),
-      getArquivosByContratoId(contrato.id).catch(() => ({ arquivos: [] })),
+      publicGetContratoDetalhado(contrato.id).catch(() => null),
+      publicGetTermosAditivos(contrato.id).catch(() => ({ data: [] })),
+      publicGetArquivosByContratoId(contrato.id).catch(() => ({ arquivos: [] })),
     ]).then(([detalhe, termos, arqs]) => {
       if (cancelled) return;
       if (detalhe) setDetalhes(detalhe);
@@ -74,6 +87,7 @@ function ModalDetalhes({
           tipo: a.tipo_arquivo ?? "",
           tamanho: a.tamanho_bytes ?? 0,
           data_upload: a.created_at ?? "",
+          tipo_vinculo: a.tipo_vinculo ?? "contrato",
         }))
       );
     }).finally(() => {
@@ -87,7 +101,7 @@ function ModalDetalhes({
     const id = `dl-ad-${arquivoId}`;
     try {
       toast.loading("Preparando download…", { id });
-      const blob = await downloadArquivoAditivo(arquivoId);
+      const blob = await publicDownloadArquivo(arquivoId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = `${ordinal(aditivoNum)}_termo_aditivo`;
@@ -101,7 +115,7 @@ function ModalDetalhes({
   async function handleDownload(arq: ArquivoItem) {
     try {
       toast.loading("Preparando download…", { id: `dl-${arq.id}` });
-      const blob = await downloadArquivoContrato(contrato.id, arq.id);
+      const blob = await publicDownloadArquivo(arq.id);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url; a.download = arq.nome;
@@ -233,42 +247,60 @@ function ModalDetalhes({
 
           <hr />
 
-          {/* Arquivos */}
-          <div>
-            <h3 className="font-bold text-gray-700 mb-2 uppercase text-xs tracking-wider">
+          {/* Arquivos agrupados por tipo */}
+          <div className="space-y-4">
+            <h3 className="font-bold text-gray-700 uppercase text-xs tracking-wider">
               Arquivos / Documentos ({arquivos.length})
             </h3>
+
             {loading ? (
               <p className="text-xs text-gray-400 italic">Carregando…</p>
             ) : arquivos.length === 0 ? (
               <p className="text-xs text-gray-400 italic">Nenhum arquivo anexado.</p>
             ) : (
-              <div className="rounded border overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="text-left px-4 py-2 font-semibold text-gray-700">Descrição do arquivo</th>
-                      <th className="text-center px-4 py-2 font-semibold text-gray-700 w-24">Download</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
-                    {arquivos.map((arq, i) => (
-                      <tr key={arq.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                        <td className="px-4 py-2 text-center text-gray-700">{arq.nome}</td>
-                        <td className="px-4 py-2 text-center">
-                          <button
-                            onClick={() => handleDownload(arq)}
-                            className="text-[#1565C0] hover:text-blue-800 transition-colors"
-                            title="Download"
-                          >
-                            ⬇
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              TIPO_VINCULO_ORDER.map(vinculo => {
+                const grupo = arquivos.filter(a => a.tipo_vinculo === vinculo);
+                if (grupo.length === 0) return null;
+                return (
+                  <div key={vinculo}>
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1 flex items-center gap-1">
+                      <span className={`inline-block w-2 h-2 rounded-full ${
+                        vinculo === "portaria" ? "bg-blue-400" :
+                        vinculo === "ata" ? "bg-purple-400" :
+                        vinculo === "termo_aditivo" ? "bg-indigo-400" :
+                        "bg-gray-400"
+                      }`}/>
+                      {TIPO_VINCULO_LABEL[vinculo] ?? vinculo} ({grupo.length})
+                    </p>
+                    <div className="rounded border overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left px-3 py-1.5 font-semibold text-gray-600">Arquivo</th>
+                            <th className="text-center px-3 py-1.5 font-semibold text-gray-600 w-20">Download</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {grupo.map((arq, i) => (
+                            <tr key={arq.id} className={i % 2 === 0 ? "bg-white" : "bg-gray-50/60"}>
+                              <td className="px-3 py-1.5 text-gray-700">{arq.nome}</td>
+                              <td className="px-3 py-1.5 text-center">
+                                <button
+                                  onClick={() => handleDownload(arq)}
+                                  className="text-[#1565C0] hover:text-blue-800 transition-colors"
+                                  title="Download"
+                                >
+                                  ⬇
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
 
@@ -291,7 +323,6 @@ function ModalDetalhes({
 // ── página principal ──────────────────────────────────────────────────────────
 
 export default function RelatorioContratos() {
-  const navigate = useNavigate();
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -313,19 +344,9 @@ export default function RelatorioContratos() {
 
   const tableRef = useRef<HTMLTableElement>(null);
 
-  // Redireciona para login se não houver sessão ativa
   useEffect(() => {
-    const token = localStorage.getItem("authToken");
-    if (!token) {
-      navigate(`/login?redirect=${encodeURIComponent("/relatorio-contratos")}`, { replace: true });
-    }
-  }, [navigate]);
-
-  useEffect(() => {
-    getStatus().then(setStatusList).catch(() => {});
-    getContratados({ page: 1, per_page: 1000 })
-      .then(r => setContratadosList(r.data))
-      .catch(() => {});
+    publicGetStatus().then(setStatusList).catch(() => {});
+    publicGetContratados().then(r => setContratadosList(r.data)).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -337,13 +358,12 @@ export default function RelatorioContratos() {
       if (contratadoId) filters.contratado_id = contratadoId;
       if (dataInicio) filters.data_inicio = dataInicio;
       if (dataFim) filters.data_fim = dataFim;
-      const r = await getContratos(filters);
+      const r = await publicGetContratos(filters);
       setTotalItems(r.total_items);
       setTotalPages(r.total_pages);
 
-      // Enriquece com detalhes completos (valor_global, data_inicio, modalidade etc.)
       const detalhados = await Promise.all(
-        r.data.map(c => getContratoDetalhado(c.id).catch(() => c))
+        r.data.map(c => publicGetContratoDetalhado(c.id).catch(() => c))
       );
       setContratos(detalhados);
     } catch {
@@ -508,16 +528,16 @@ export default function RelatorioContratos() {
           </div>
 
           {/* Tabela */}
-          <div className="w-full border border-gray-200 rounded overflow-hidden">
-            <table ref={tableRef} className="w-full text-xs border-collapse">
+          <div className="w-full border border-gray-200 rounded overflow-x-auto">
+            <table ref={tableRef} className="w-full text-[11px] border-collapse">
               <thead>
                 <tr className="bg-gray-100 border-b border-gray-300">
-                  {["#", "Nº do contrato", "Fiscal do contrato", "Fundamentação legal",
-                    "Contratado", "Objeto", "Valor global", "Modalidade",
-                    "Data início", "Data fim", "Termos Contratuais", "Situação", "Ações"
+                  {["#", "Nº Contrato", "Fiscal / Suplente", "Fund. Legal",
+                    "Contratado", "Objeto", "Valor Global", "Modalidade",
+                    "Início", "Fim", "Situação", "Ações"
                   ].map(h => (
                     <th key={h}
-                      className="text-left px-3 py-2 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 last:border-r-0">
+                      className="text-left px-2 py-1.5 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 last:border-r-0">
                       {h}
                     </th>
                   ))}
@@ -525,34 +545,38 @@ export default function RelatorioContratos() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={13} className="text-center py-10 text-gray-400">Carregando…</td></tr>
+                  <tr><td colSpan={12} className="text-center py-10 text-gray-400">Carregando…</td></tr>
                 ) : contratos.length === 0 ? (
-                  <tr><td colSpan={13} className="text-center py-10 text-gray-400">Nenhum contrato encontrado.</td></tr>
+                  <tr><td colSpan={12} className="text-center py-10 text-gray-400">Nenhum contrato encontrado.</td></tr>
                 ) : (
                   contratos.map((c, idx) => {
                     const rowNum = (page - 1) * perPage + idx + 1;
                     return (
                       <tr key={c.id}
                         className={`border-b border-gray-100 hover:bg-blue-50 transition-colors ${idx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}`}>
-                        <td className="px-3 py-2 text-gray-500 border-r border-gray-100">{rowNum}</td>
-                        <td className="px-3 py-2 font-medium text-blue-800 border-r border-gray-100 whitespace-nowrap">{c.nr_contrato}</td>
-                        <td className="px-3 py-2 border-r border-gray-100">
-                          {c.fiscal_nome
-                            ? <><span>{c.fiscal_nome} (Fiscal)</span>{c.fiscal_substituto_nome && <><br /><span className="text-gray-500">{c.fiscal_substituto_nome} (Suplente)</span></>}</>
-                            : <span className="text-gray-400">—</span>}
+                        <td className="px-2 py-1.5 text-gray-400 border-r border-gray-100 w-6 text-center">{rowNum}</td>
+                        <td className="px-2 py-1.5 font-semibold text-blue-800 border-r border-gray-100 whitespace-nowrap">{c.nr_contrato}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[140px]">
+                          {c.fiscal_nome ? (
+                            <div className="truncate" title={`${c.fiscal_nome}${c.fiscal_substituto_nome ? ` / ${c.fiscal_substituto_nome}` : ""}`}>
+                              <span>{c.fiscal_nome}</span>
+                              {c.fiscal_substituto_nome && (
+                                <span className="text-gray-400"> / {c.fiscal_substituto_nome}</span>
+                              )}
+                            </div>
+                          ) : <span className="text-gray-400">—</span>}
                         </td>
-                        <td className="px-3 py-2 border-r border-gray-100 max-w-[180px]">{c.base_legal || c.pae || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 font-medium whitespace-nowrap">{c.contratado_nome || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 max-w-[240px]">
-                          <span className="line-clamp-2">{c.objeto || "—"}</span>
+                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[100px] truncate" title={c.base_legal || c.pae || ""}>{c.base_legal || c.pae || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[160px] truncate" title={c.contratado_nome || ""}>{c.contratado_nome || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[180px]">
+                          <span className="line-clamp-1 truncate block" title={c.objeto || ""}>{c.objeto || "—"}</span>
                         </td>
-                        <td className="px-3 py-2 border-r border-gray-100 text-right tabular-nums whitespace-nowrap">{fmt(c.valor_global)}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">{c.modalidade_nome || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_inicio)}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_fim)}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 max-w-[250px] truncate" title={c.termos_contratuais || ""}>{c.termos_contratuais || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold
+                        <td className="px-2 py-1.5 border-r border-gray-100 text-right tabular-nums whitespace-nowrap">{fmt(c.valor_global)}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 max-w-[120px] truncate" title={c.modalidade_nome || ""}>{c.modalidade_nome || <span className="text-gray-400">—</span>}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_inicio)}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 tabular-nums whitespace-nowrap">{fmtData(c.data_fim)}</td>
+                        <td className="px-2 py-1.5 border-r border-gray-100 whitespace-nowrap">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold
                             ${(c.status_nome ?? "").toLowerCase().includes("ativ") ? "bg-green-100 text-green-800" :
                               (c.status_nome ?? "").toLowerCase().includes("encerr") ? "bg-gray-200 text-gray-700" :
                               (c.status_nome ?? "").toLowerCase().includes("rescind") ? "bg-red-100 text-red-700" :
@@ -560,10 +584,10 @@ export default function RelatorioContratos() {
                             {c.status_nome || "—"}
                           </span>
                         </td>
-                        <td className="px-3 py-2 no-print">
+                        <td className="px-2 py-1.5 no-print">
                           <button
                             onClick={() => setContratoModal(c)}
-                            className="px-3 py-1 text-[11px] font-semibold text-white bg-[#1565C0] hover:bg-[#1045A0] rounded"
+                            className="px-2 py-0.5 text-[10px] font-semibold text-white bg-[#1565C0] hover:bg-[#1045A0] rounded"
                           >
                             Ações
                           </button>
