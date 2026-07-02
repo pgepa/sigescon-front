@@ -27,6 +27,7 @@ import Fiscalizacao from '@/pages/fiscalizacao/Fiscalizacao';
 import GestaoPendenciasVencidas from '@/pages/pendencias/GestaoPendenciasVencidas';
 import Administracao from '@/pages/admin/Administracao';
 import LogsAuditoria from '@/pages/admin/LogsAuditoria';
+import GestaoResponsaveis from '@/pages/responsaveis/GestaoResponsaveis';
 
 // Componente para dashboard dinâmico baseado no perfil
 import DashboardRouter from '@/components/DashboardRouter';
@@ -157,6 +158,10 @@ export const router = createHashRouter([
       {
         path: '/gestao-relatorios',
         element: <ProtectedRoute requiredProfiles={['Administrador']}><AnalisarRelatoriosNovo /></ProtectedRoute>,
+      },
+      {
+        path: '/gestao-responsaveis',
+        element: <ProtectedRoute requiredProfiles={['Administrador']}><GestaoResponsaveis /></ProtectedRoute>,
       },
       {
         path: '/configuracoes',
