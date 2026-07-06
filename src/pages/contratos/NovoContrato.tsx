@@ -17,8 +17,8 @@ const contractSchema = z.object({
     contratado_id: z.string().min(1, "Contratado é obrigatório"),
     modalidade_id: z.string().min(1, "Modalidade é obrigatória"),
     status_id: z.string().min(1, "Status é obrigatório"),
-    gestor_id: z.string().min(1, "Gestor é obrigatório"),
-    fiscal_id: z.string().min(1, "Fiscal é obrigatório"),
+    gestor_id: z.string().optional(),
+    fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
     valor_anual: z.string().optional().refine(
         (val) => !val || val === "" || parseFloat(val) >= 0,
@@ -34,6 +34,8 @@ const contractSchema = z.object({
     doe: z.string().optional(),
     data_doe: z.string().optional(),
     garantia: z.string().optional(),
+    portaria_fiscal: z.string().optional(),
+    nr_adesao_ata: z.string().optional(),
 });
 
 type ContractFormData = z.infer<typeof contractSchema>;
@@ -222,6 +224,8 @@ export function NovoContrato() {
     const navigate = useNavigate();
     // ALTERADO: Volta para múltiplos arquivos
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+    const [selectedPortariaFile, setSelectedPortariaFile] = useState<File | null>(null);
+    const [selectedAtaFile, setSelectedAtaFile] = useState<File | null>(null);
 
     // Estados para os dropdowns
     const [contratados, setContratados] = useState<any[]>([]);
@@ -693,6 +697,16 @@ export function NovoContrato() {
                 }
             });
 
+            // Adicionar arquivo da portaria se selecionado
+            if (selectedPortariaFile) {
+                formData.append("documento_portaria", selectedPortariaFile);
+            }
+
+            // Adicionar arquivo da ata de registro de preço se selecionado
+            if (selectedAtaFile) {
+                formData.append("documento_ata_registro", selectedAtaFile);
+            }
+
             // Adicionar múltiplos arquivos se selecionados
             if (selectedFiles.length > 0) {
                 console.log("Adicionando arquivos ao FormData:", selectedFiles.map(f => ({
@@ -934,6 +948,54 @@ export function NovoContrato() {
                     {errors.objeto && <p className="text-red-500 text-sm">{errors.objeto.message}</p>}
                 </div>
 
+                {/* Nº Adesão Ata de Registro de Preço */}
+                <div className="md:col-span-1 lg:col-span-2">
+                    <label className="font-medium">Nº Adesão Ata de Registro de Preço</label>
+                    <div className="mt-1 flex gap-2">
+                        <input
+                            type="text"
+                            {...register("nr_adesao_ata")}
+                            className="border rounded-lg p-2 flex-1"
+                            placeholder="Ex: ATA nº 001/2025"
+                        />
+                        <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap">
+                            <Upload size={16} />
+                            {selectedAtaFile ? "Trocar" : "Upload"}
+                            <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+                                            toast.error("Tipo de arquivo não permitido");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (file.size > MAX_FILE_SIZE) {
+                                            toast.error("Arquivo muito grande (máx. 50MB)");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        setSelectedAtaFile(file);
+                                        toast.success(`Arquivo "${file.name}" selecionado`);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                accept={ACCEPT_STRING}
+                            />
+                        </label>
+                    </div>
+                    {selectedAtaFile && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded p-2">
+                            <span className="truncate flex-1">{selectedAtaFile.name}</span>
+                            <button type="button" onClick={() => { setSelectedAtaFile(null); toast.info("Arquivo removido"); }} className="text-red-500 hover:text-red-700">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 {/* Campos ocultos para react-hook-form */}
                 <input {...register("contratado_id")} type="hidden" />
                 <input {...register("gestor_id")} type="hidden" />
@@ -964,7 +1026,7 @@ export function NovoContrato() {
 
                 {/* Gestor do Contrato */}
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Gestor *</label>
+                    <label className="font-medium">Gestor</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosGestores}
@@ -983,7 +1045,7 @@ export function NovoContrato() {
 
                 {/* Fiscal do Contrato */}
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Fiscal *</label>
+                    <label className="font-medium">Fiscal</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosFiscais}
@@ -1016,6 +1078,54 @@ export function NovoContrato() {
                             onCreateNew={handleCreateUser}
                         />
                     </div>
+                </div>
+
+                {/* Portaria de Designação do Fiscal */}
+                <div className="md:col-span-1 lg:col-span-2">
+                    <label className="font-medium">Portaria de Designação do Fiscal</label>
+                    <div className="mt-1 flex gap-2">
+                        <input
+                            type="text"
+                            {...register("portaria_fiscal")}
+                            className="border rounded-lg p-2 flex-1"
+                            placeholder="Ex: Portaria nº 123/2025"
+                        />
+                        <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap">
+                            <Upload size={16} />
+                            {selectedPortariaFile ? "Trocar" : "Upload"}
+                            <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+                                            toast.error("Tipo de arquivo não permitido");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (file.size > MAX_FILE_SIZE) {
+                                            toast.error("Arquivo muito grande (máx. 50MB)");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        setSelectedPortariaFile(file);
+                                        toast.success(`Arquivo "${file.name}" selecionado`);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                accept={ACCEPT_STRING}
+                            />
+                        </label>
+                    </div>
+                    {selectedPortariaFile && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded p-2">
+                            <span className="truncate flex-1">{selectedPortariaFile.name}</span>
+                            <button type="button" onClick={() => { setSelectedPortariaFile(null); toast.info("Arquivo removido"); }} className="text-red-500 hover:text-red-700">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
                 </div>
 
                 {/* Datas */}
@@ -1097,13 +1207,14 @@ export function NovoContrato() {
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
                     <label className="font-medium">Base Legal</label>
-                    <input 
-                        type="text" 
-                        {...register("base_legal")} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                    <input
+                        type="text"
+                        {...register("base_legal")}
+                        className="mt-1 border rounded-lg p-2 w-full"
                         placeholder="Ex: Lei nº 8.666/93"
                     />
                 </div>
+
                 <div className="lg:col-span-4">
                     <label className="font-medium">Termos Contratuais</label>
                     <textarea 
