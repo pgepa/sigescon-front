@@ -28,6 +28,9 @@ interface FormularioFiscalizacaoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contrato?: ContratoInfo;
+  /** ID numérico do contrato — usado nas rotas por ID, que evitam o problema
+   * de barra em nr_contrato (ex: "30/2025") sendo cortada por proxies/Apache. */
+  contratoId: number;
   /** Se informado, o modal entra em modo edição (PATCH em vez de POST) */
   relatorioId?: number;
   /** Dados pré-preenchidos ao abrir para edição */
@@ -204,6 +207,7 @@ export function FormularioFiscalizacaoModal({
   open,
   onOpenChange,
   contrato,
+  contratoId,
   relatorioId,
   dadosIniciais,
 }: FormularioFiscalizacaoModalProps) {
@@ -250,7 +254,7 @@ export function FormularioFiscalizacaoModal({
   });
 
   const handleSalvar = async (status: "rascunho" | "enviado") => {
-    if (!relatorioId && !contrato?.nr_contrato) {
+    if (!relatorioId && !contratoId) {
       alert("Erro: Não foi possível identificar o contrato.");
       return;
     }
@@ -279,7 +283,7 @@ export function FormularioFiscalizacaoModal({
       if (relatorioId) {
         await api.patch(`/relatorios/${relatorioId}`, payload);
       } else {
-        const resposta = await api.post(`/relatorios/salvar/${encodeURIComponent(contrato!.nr_contrato!)}`, payload);
+        const resposta = await api.post(`/relatorios/salvar-contrato/${contratoId}`, payload);
         idParaEnviar = resposta.data?.id;
       }
 
@@ -308,8 +312,8 @@ export function FormularioFiscalizacaoModal({
   };
 
   const handleGerarPdf = async () => {
-    if (!contrato?.nr_contrato) {
-      alert("Erro: Não foi possível identificar o número do contrato.");
+    if (!contratoId) {
+      alert("Erro: Não foi possível identificar o contrato.");
       return;
     }
 
@@ -329,7 +333,7 @@ export function FormularioFiscalizacaoModal({
       };
 
       const response = await api.post(
-        `/relatorios/gerar-pdf/${encodeURIComponent(contrato.nr_contrato)}`,
+        `/relatorios/gerar-pdf-contrato/${contratoId}`,
         payload,
         { responseType: "blob" }
       );
@@ -337,7 +341,7 @@ export function FormularioFiscalizacaoModal({
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const nomeContrato = contrato.nr_contrato?.replace("/", "-") || contrato.id;
+      const nomeContrato = contrato?.nr_contrato?.replace("/", "-") || contratoId;
       link.setAttribute("download", `Fiscalizacao_Contrato_${nomeContrato}.pdf`);
       document.body.appendChild(link);
       link.click();

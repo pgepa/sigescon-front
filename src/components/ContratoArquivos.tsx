@@ -446,6 +446,7 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
           }
         }}
         contrato={contrato}
+        contratoId={contratoId}
         relatorioId={editandoRelatorio?.id}
         dadosIniciais={editandoRelatorio ? dbParaRespostas(editandoRelatorio.dados) : undefined}
       />
