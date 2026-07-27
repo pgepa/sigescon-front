@@ -660,31 +660,33 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                         <TableCell className="text-right">
                           <div className="flex justify-end items-center gap-2">
 
+                            {/* === EDIÇÃO DE RASCUNHO — disponível para quem visualiza o rascunho (fiscal ou gestor/admin) === */}
+                            {rel.status === "rascunho" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2.5 text-xs gap-1 border-amber-400 text-amber-700 hover:bg-amber-50"
+                                disabled={carregandoEdicao === rel.id || enviando === rel.id}
+                                onClick={() => handleAbrirEdicao(rel.id)}
+                              >
+                                {carregandoEdicao === rel.id
+                                  ? <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                  : <>✏️ Editar</>}
+                              </Button>
+                            )}
+
                             {/* === AÇÕES DO FISCAL === */}
                             {ehFiscal && rel.status === "rascunho" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2.5 text-xs gap-1 border-amber-400 text-amber-700 hover:bg-amber-50"
-                                  disabled={carregandoEdicao === rel.id || enviando === rel.id}
-                                  onClick={() => handleAbrirEdicao(rel.id)}
-                                >
-                                  {carregandoEdicao === rel.id
-                                    ? <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                                    : <>✏️ Editar</>}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  className="h-7 px-2.5 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                  disabled={enviando === rel.id || carregandoEdicao === rel.id}
-                                  onClick={() => handleEnviarParaGestor(rel.id)}
-                                >
-                                  {enviando === rel.id
-                                    ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    : <>📤 Enviar</>}
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                disabled={enviando === rel.id || carregandoEdicao === rel.id}
+                                onClick={() => handleEnviarParaGestor(rel.id)}
+                              >
+                                {enviando === rel.id
+                                  ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  : <>📤 Enviar</>}
+                              </Button>
                             )}
                             {ehFiscal && rel.status === "nao_conforme" && (
                               <span
