@@ -254,7 +254,7 @@ export function FormularioFiscalizacaoModal({
   });
 
   const handleSalvar = async (status: "rascunho" | "enviado") => {
-    if (!relatorioId && !contratoId) {
+    if (!relatorioId && !contratoId && !contrato?.nr_contrato) {
       alert("Erro: Não foi possível identificar o contrato.");
       return;
     }
@@ -341,7 +341,7 @@ export function FormularioFiscalizacaoModal({
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      const nomeContrato = contrato?.nr_contrato?.replace("/", "-") || contratoId;
+      const nomeContrato = contrato?.nr_contrato?.replace("/", "-") || contrato?.id || contratoId;
       link.setAttribute("download", `Fiscalizacao_Contrato_${nomeContrato}.pdf`);
       document.body.appendChild(link);
       link.click();
