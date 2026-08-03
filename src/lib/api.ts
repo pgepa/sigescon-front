@@ -2729,6 +2729,7 @@ export type TermoAditivo = {
     objeto: string;
     data_assinatura: string;
     data_publicacao: string | null;
+    data_inicio: string | null;
     nova_data_fim: string | null;
     valor_acrescimo: number | null;
     valor_supressao: number | null;
@@ -2744,6 +2745,7 @@ export type TermoAditivoCreate = {
     objeto: string;
     data_assinatura: string;
     data_publicacao?: string | null;
+    data_inicio?: string | null;
     nova_data_fim?: string | null;
     valor_acrescimo?: number | null;
     valor_supressao?: number | null;
