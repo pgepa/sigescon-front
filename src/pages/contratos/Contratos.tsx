@@ -52,7 +52,7 @@ import {
     criarPendenciasAutomaticas as criarPendenciasAutomaticasAPI,
     getTermosAditivos,
     createTermoAditivo,
-   // updateTermoAditivo,
+    updateTermoAditivo,
     deleteTermoAditivo,
     uploadArquivoAditivo,
     //downloadArquivoContrato,
@@ -1091,31 +1091,36 @@ const columns: ColumnDef<ContratoList>[] = [
     { accessorKey: "garantia_prazo_dias" },
 ];
 
-function gerarDescricaoAditivo(
-    tipo: string | undefined,
-    dataAssinatura?: string,
-    novaDataFim?: string | null,
-    valorAcrescimo?: number | null
-): string {
+type CamposDescricaoAditivo = Pick<
+    Partial<TermoAditivoCreate>,
+    "tipo" | "data_assinatura" | "data_inicio" | "nova_data_fim" | "valor_acrescimo" | "valor_supressao"
+>;
+
+function gerarDescricaoAditivo(campos: CamposDescricaoAditivo): string {
+    const { tipo, data_assinatura: dataAssinatura, data_inicio: dataInicio, nova_data_fim: novaDataFim, valor_acrescimo: valorAcrescimo, valor_supressao: valorSupressao } = campos;
     if (!tipo) return "";
     const fmt = (d: string) => { const [y, m, dia] = d.split("-"); return `${dia}/${m}/${y}`; };
+    const fmtVal = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const descricaoValor = () => {
+        const partes: string[] = [];
+        if (valorAcrescimo != null) partes.push(`Acréscimo de R$ ${fmtVal(valorAcrescimo)}`);
+        if (valorSupressao != null) partes.push(`Supressão de R$ ${fmtVal(valorSupressao)}`);
+        return partes.length > 0 ? partes.join(" e ") : "Acréscimo de R$ —";
+    };
+    const descricaoVigencia = () => {
+        const inicio = dataInicio ? fmt(dataInicio) : null;
+        const fim = novaDataFim ? fmt(novaDataFim) : "—";
+        return inicio ? `Nova vigência: ${inicio} a ${fim}` : `Nova data fim: ${fim}`;
+    };
     if (tipo === "Prazo") {
         const assin = dataAssinatura ? fmt(dataAssinatura) : "—";
-        const fim = novaDataFim ? fmt(novaDataFim) : "—";
-        return `Aditamento de prazo - Data de assinatura: ${assin} - Nova data fim: ${fim}`;
+        return `Aditamento de prazo - Data de assinatura: ${assin} - ${descricaoVigencia()}`;
     }
     if (tipo === "Valor") {
-        const val = valorAcrescimo != null
-            ? valorAcrescimo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : "—";
-        return `Aditamento de valor - Acréscimo de R$ ${val}`;
+        return `Aditamento de valor - ${descricaoValor()}`;
     }
     if (tipo === "Misto") {
-        const val = valorAcrescimo != null
-            ? valorAcrescimo.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : "—";
-        const fim = novaDataFim ? fmt(novaDataFim) : "—";
-        return `Aditamento de valor e prazo - Acréscimo de R$ ${val} - Nova data fim: ${fim}`;
+        return `Aditamento de valor e prazo - ${descricaoValor()} - ${descricaoVigencia()}`;
     }
     return "";
 }
@@ -1169,6 +1174,10 @@ export function ContratosDataTable() {
     const [salvandoEdicaoAditivo, setSalvandoEdicaoAditivo] = React.useState<Set<number>>(new Set());
     const [arquivoAditivo, setArquivoAditivo] = React.useState<Record<number, File | null>>({});
     const [arquivoEdicaoAditivo, setArquivoEdicaoAditivo] = React.useState<Record<number, File | null>>({});
+    // Uma vez que o usuário edita a descrição diretamente (ou ela já veio customizada do banco),
+    // ela para de ser sobrescrita automaticamente pelas mudanças dos outros campos
+    const [objetoManualNovo, setObjetoManualNovo] = React.useState<Set<number>>(new Set());
+    const [objetoManualEdicao, setObjetoManualEdicao] = React.useState<Set<number>>(new Set());
 
     const toggleExpandRow = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation();
@@ -1217,6 +1226,7 @@ export function ContratosDataTable() {
             setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
             setNovoAditivo(prev => { const n = { ...prev }; delete n[contratoId]; return n; });
             setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(contratoId); return n; });
+            setObjetoManualNovo(prev => { const n = new Set(prev); n.delete(contratoId); return n; });
             toast.success(`${criado.numero_aditivo}º Termo Aditivo criado com sucesso!`);
         } catch {
             toast.error("Erro ao criar termo aditivo.");
@@ -1279,11 +1289,29 @@ export function ContratosDataTable() {
                 objeto: ad.objeto,
                 data_assinatura: ad.data_assinatura,
                 data_publicacao: ad.data_publicacao ?? undefined,
+                data_inicio: ad.data_inicio ?? undefined,
                 nova_data_fim: ad.nova_data_fim ?? undefined,
                 valor_acrescimo: ad.valor_acrescimo ?? undefined,
+                valor_supressao: ad.valor_supressao ?? undefined,
                 pae: ad.pae ?? undefined,
             }
         }));
+        // Se a descrição salva já não corresponder ao texto automático (ex.: foi digitada à mão
+        // antes, ou o registro é anterior a um campo novo como Supressão), trata como manual
+        // desde já, para não sobrescrever o que já está gravado.
+        const textoAutomatico = gerarDescricaoAditivo({
+            tipo: ad.tipo,
+            data_assinatura: ad.data_assinatura,
+            data_inicio: ad.data_inicio,
+            nova_data_fim: ad.nova_data_fim,
+            valor_acrescimo: ad.valor_acrescimo,
+            valor_supressao: ad.valor_supressao,
+        });
+        setObjetoManualEdicao(prev => {
+            const n = new Set(prev);
+            if (ad.objeto !== textoAutomatico) n.add(ad.id); else n.delete(ad.id);
+            return n;
+        });
     };
 
     const handleSalvarEdicaoAditivo = async (contratoId: number, aditivoId: number, e: React.MouseEvent) => {
@@ -1295,7 +1323,7 @@ export function ContratosDataTable() {
         }
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
         try {
-            // const atualizado = await updateTermoAditivo(contratoId, aditivoId, dados);
+            await updateTermoAditivo(contratoId, aditivoId, dados);
             const arquivo = arquivoEdicaoAditivo[aditivoId];
             if (arquivo) {
                 try {
@@ -1309,6 +1337,7 @@ export function ContratosDataTable() {
             const res = await getTermosAditivos(contratoId);
             setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
             setEditandoAditivo(prev => { const n = { ...prev }; delete n[aditivoId]; return n; });
+            setObjetoManualEdicao(prev => { const n = new Set(prev); n.delete(aditivoId); return n; });
             toast.success("Termo aditivo atualizado com sucesso!");
         } catch {
             toast.error("Erro ao atualizar termo aditivo.");
@@ -1802,6 +1831,7 @@ export function ContratosDataTable() {
                                                                                         });
                                                                                         if (abrindo) {
                                                                                             setNovoAditivo(prev => ({ ...prev, [c.id]: {} }));
+                                                                                            setObjetoManualNovo(prev => { const n = new Set(prev); n.delete(c.id); return n; });
                                                                                         }
                                                                                     }}
                                                                                 >
@@ -1821,12 +1851,13 @@ export function ContratosDataTable() {
                                                                                         onValueChange={v => {
                                                                                             const tipo = v as TermoAditivoCreate["tipo"];
                                                                                             const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
                                                                                                     tipo,
-                                                                                                    objeto: gerarDescricaoAditivo(tipo, curr.data_assinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, tipo })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -1847,14 +1878,36 @@ export function ContratosDataTable() {
                                                                                         className="h-8 text-xs"
                                                                                         value={novoAditivo[c.id]?.data_assinatura ?? ""}
                                                                                         onChange={e => {
-                                                                                            const dataAssinatura = e.target.value;
+                                                                                            const data_assinatura = e.target.value;
                                                                                             const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
-                                                                                                    data_assinatura: dataAssinatura,
-                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, dataAssinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                    data_assinatura,
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <label className="text-xs font-medium text-gray-600">Data Início</label>
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        className="h-8 text-xs"
+                                                                                        value={novoAditivo[c.id]?.data_inicio ?? ""}
+                                                                                        onChange={e => {
+                                                                                            const data_inicio = e.target.value || null;
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    data_inicio,
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -1867,14 +1920,15 @@ export function ContratosDataTable() {
                                                                                         className="h-8 text-xs"
                                                                                         value={novoAditivo[c.id]?.nova_data_fim ?? ""}
                                                                                         onChange={e => {
-                                                                                            const novaDataFim = e.target.value || null;
+                                                                                            const nova_data_fim = e.target.value || null;
                                                                                             const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
-                                                                                                    nova_data_fim: novaDataFim,
-                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, novaDataFim, curr.valor_acrescimo)
+                                                                                                    nova_data_fim,
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -1888,14 +1942,37 @@ export function ContratosDataTable() {
                                                                                         placeholder="0,00"
                                                                                         value={novoAditivo[c.id]?.valor_acrescimo ?? ""}
                                                                                         onChange={e => {
-                                                                                            const valorAcrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                            const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
                                                                                             const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
-                                                                                                    valor_acrescimo: valorAcrescimo,
-                                                                                                    objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, curr.nova_data_fim, valorAcrescimo)
+                                                                                                    valor_acrescimo,
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_acrescimo })
+                                                                                                }
+                                                                                            }));
+                                                                                        }}
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="flex flex-col gap-1">
+                                                                                    <label className="text-xs font-medium text-gray-600">Valor Supressão (R$)</label>
+                                                                                    <Input
+                                                                                        type="number"
+                                                                                        className="h-8 text-xs"
+                                                                                        placeholder="0,00"
+                                                                                        value={novoAditivo[c.id]?.valor_supressao ?? ""}
+                                                                                        onChange={e => {
+                                                                                            const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                            const curr = novoAditivo[c.id] ?? {};
+                                                                                            const manual = objetoManualNovo.has(c.id);
+                                                                                            setNovoAditivo(prev => ({
+                                                                                                ...prev,
+                                                                                                [c.id]: {
+                                                                                                    ...prev[c.id],
+                                                                                                    valor_supressao,
+                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_supressao })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -1944,7 +2021,10 @@ export function ContratosDataTable() {
                                                                                         className="h-8 text-xs"
                                                                                         placeholder="Preenchido automaticamente conforme o tipo..."
                                                                                         value={novoAditivo[c.id]?.objeto ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], objeto: e.target.value } }))}
+                                                                                        onChange={e => {
+                                                                                            setObjetoManualNovo(prev => new Set(prev).add(c.id));
+                                                                                            setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], objeto: e.target.value } }));
+                                                                                        }}
                                                                                     />
                                                                                 </div>
                                                                                 {/* Linha 3 — botões */}
@@ -1961,7 +2041,7 @@ export function ContratosDataTable() {
                                                                                         size="sm"
                                                                                         variant="outline"
                                                                                         className="h-8 text-xs"
-                                                                                        onClick={(e) => { e.stopPropagation(); setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
+                                                                                        onClick={(e) => { e.stopPropagation(); setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); setObjetoManualNovo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
                                                                                     >
                                                                                         Cancelar
                                                                                     </Button>
@@ -1990,8 +2070,10 @@ export function ContratosDataTable() {
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700">Descrição</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Assinatura</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Publicação</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Início</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Vigência</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Acréscimo</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Supressão</th>
                                                                                             <th className="text-center px-3 py-2 font-semibold text-indigo-700 w-20">Arquivo</th>
                                                                                             {canManageAditivos && <th className="w-8 px-3 py-2" />}
                                                                                         </tr>
@@ -2030,8 +2112,10 @@ export function ContratosDataTable() {
                                                                                                 <td className="px-3 py-2 text-gray-700 max-w-[250px] truncate" title={ad.objeto}>{ad.objeto}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{formatDate(ad.data_assinatura)}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.data_publicacao ? formatDate(ad.data_publicacao) : "—"}</td>
+                                                                                                <td className="px-3 py-2 text-gray-600">{ad.data_inicio ? formatDate(ad.data_inicio) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
+                                                                                                <td className="px-3 py-2 text-gray-600">{ad.valor_supressao ? formatCurrency(ad.valor_supressao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-center">
                                                                                                     {ad.arquivo_id ? (
                                                                                                         <button
@@ -2107,7 +2191,7 @@ export function ContratosDataTable() {
                                                                                             </tr>
                                                                                             {editandoAditivo[ad.id] !== undefined && (
                                                                                                 <tr className="bg-indigo-50/40">
-                                                                                                    <td colSpan={7} className="px-3 py-3">
+                                                                                                    <td colSpan={9} className="px-3 py-3">
                                                                                                         <div className="grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
                                                                                                             <div className="flex flex-col gap-1">
                                                                                                                 <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
@@ -2115,12 +2199,13 @@ export function ContratosDataTable() {
                                                                                                                     onValueChange={v => {
                                                                                                                         const tipo = v as TermoAditivoCreate["tipo"];
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
                                                                                                                                 tipo,
-                                                                                                                                objeto: gerarDescricaoAditivo(tipo, curr.data_assinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, tipo })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
@@ -2141,14 +2226,36 @@ export function ContratosDataTable() {
                                                                                                                     className="h-8 text-xs"
                                                                                                                     value={editandoAditivo[ad.id]?.data_assinatura ?? ""}
                                                                                                                     onChange={e => {
-                                                                                                                        const dataAssinatura = e.target.value;
+                                                                                                                        const data_assinatura = e.target.value;
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
-                                                                                                                                data_assinatura: dataAssinatura,
-                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, dataAssinatura, curr.nova_data_fim, curr.valor_acrescimo)
+                                                                                                                                data_assinatura,
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-col gap-1">
+                                                                                                                <label className="text-xs font-medium text-gray-600">Data Início</label>
+                                                                                                                <Input
+                                                                                                                    type="date"
+                                                                                                                    className="h-8 text-xs"
+                                                                                                                    value={editandoAditivo[ad.id]?.data_inicio ?? ""}
+                                                                                                                    onChange={e => {
+                                                                                                                        const data_inicio = e.target.value || null;
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                data_inicio,
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
@@ -2161,14 +2268,15 @@ export function ContratosDataTable() {
                                                                                                                     className="h-8 text-xs"
                                                                                                                     value={editandoAditivo[ad.id]?.nova_data_fim ?? ""}
                                                                                                                     onChange={e => {
-                                                                                                                        const novaDataFim = e.target.value || null;
+                                                                                                                        const nova_data_fim = e.target.value || null;
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
-                                                                                                                                nova_data_fim: novaDataFim,
-                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, novaDataFim, curr.valor_acrescimo)
+                                                                                                                                nova_data_fim,
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
@@ -2182,14 +2290,37 @@ export function ContratosDataTable() {
                                                                                                                     placeholder="0,00"
                                                                                                                     value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
                                                                                                                     onChange={e => {
-                                                                                                                        const valorAcrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                        const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
-                                                                                                                                valor_acrescimo: valorAcrescimo,
-                                                                                                                                objeto: gerarDescricaoAditivo(curr.tipo, curr.data_assinatura, curr.nova_data_fim, valorAcrescimo)
+                                                                                                                                valor_acrescimo,
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_acrescimo })
+                                                                                                                            }
+                                                                                                                        }));
+                                                                                                                    }}
+                                                                                                                />
+                                                                                                            </div>
+                                                                                                            <div className="flex flex-col gap-1">
+                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Supressão (R$)</label>
+                                                                                                                <Input
+                                                                                                                    type="number"
+                                                                                                                    className="h-8 text-xs"
+                                                                                                                    placeholder="0,00"
+                                                                                                                    value={editandoAditivo[ad.id]?.valor_supressao ?? ""}
+                                                                                                                    onChange={e => {
+                                                                                                                        const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                        setEditandoAditivo(prev => ({
+                                                                                                                            ...prev,
+                                                                                                                            [ad.id]: {
+                                                                                                                                ...prev[ad.id],
+                                                                                                                                valor_supressao,
+                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_supressao })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
@@ -2237,7 +2368,10 @@ export function ContratosDataTable() {
                                                                                                                     className="h-8 text-xs"
                                                                                                                     placeholder="Preenchido automaticamente conforme o tipo..."
                                                                                                                     value={editandoAditivo[ad.id]?.objeto ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], objeto: e.target.value } }))}
+                                                                                                                    onChange={e => {
+                                                                                                                        setObjetoManualEdicao(prev => new Set(prev).add(ad.id));
+                                                                                                                        setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], objeto: e.target.value } }));
+                                                                                                                    }}
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
@@ -2245,7 +2379,7 @@ export function ContratosDataTable() {
                                                                                                                     size="sm"
                                                                                                                     variant="outline"
                                                                                                                     className="h-8 text-xs"
-                                                                                                                    onClick={e => { e.stopPropagation(); setEditandoAditivo(prev => { const n = { ...prev }; delete n[ad.id]; return n; }); }}
+                                                                                                                    onClick={e => { e.stopPropagation(); setEditandoAditivo(prev => { const n = { ...prev }; delete n[ad.id]; return n; }); setObjetoManualEdicao(prev => { const n = new Set(prev); n.delete(ad.id); return n; }); }}
                                                                                                                 >
                                                                                                                     Cancelar
                                                                                                                 </Button>
