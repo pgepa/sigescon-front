@@ -7,6 +7,7 @@ import { Save, SquareX, Upload, Trash2, ChevronDown, Search, X, UserPlus } from 
 import { Button } from '@/components/ui/button';
 import React from 'react';
 import { toast } from 'sonner';
+import { getContratados } from '@/lib/api';
 
 // Schema de validação Zod ajustado para a nova API
 const contractSchema = z.object({
@@ -66,20 +67,35 @@ interface SearchableSelectProps {
     onCreateNew?: () => void;
     createNewLabel?: string;
     maxHeight?: string;
+    // Quando informado, a busca por texto é delegada ao servidor (debounced) em vez de
+    // filtrar apenas a lista local de `options` — necessário quando há mais itens do que
+    // a página inicial carrega.
+    onSearch?: (term: string) => void;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80" }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", onSearch }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (onSearch) {
+            // busca já vem filtrada do servidor
+            setFilteredOptions(options);
+            return;
+        }
         const filtered = options.filter(option =>
             option.nome.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setFilteredOptions(filtered);
-    }, [searchTerm, options]);
+    }, [searchTerm, options, onSearch]);
+
+    useEffect(() => {
+        if (!onSearch) return;
+        const timeout = setTimeout(() => onSearch(searchTerm), 300);
+        return () => clearTimeout(timeout);
+    }, [searchTerm, onSearch]);
 
     // Fechar dropdown ao clicar fora
     useEffect(() => {
@@ -153,7 +169,7 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                         {options.length > 0 && (
                             <div className="mt-2 text-xs text-blue-600 flex items-center justify-between">
                                 <span>{filteredOptions.length} de {options.length} usuários</span>
-                                {options.length >= 100 && (
+                                {!onSearch && options.length >= 100 && (
                                     <span className="text-amber-600">⚠ Lista limitada a 100 usuários</span>
                                 )}
                             </div>
@@ -276,6 +292,16 @@ export function NovoContrato() {
     } = useForm<ContractFormData>({
         resolver: zodResolver(contractSchema),
     });
+
+    // Busca contratados no servidor (a lista pode ter mais itens do que a página inicial de 100 carrega)
+    const handleSearchContratados = React.useCallback(async (term: string) => {
+        try {
+            const res = await getContratados({ page: 1, per_page: 50, nome: term || undefined });
+            setContratados((res as any).data || res);
+        } catch (err) {
+            console.error("Erro ao buscar contratados:", err);
+        }
+    }, []);
 
     // Carregar opções iniciais
     useEffect(() => {
@@ -1011,6 +1037,7 @@ export function NovoContrato() {
                         <SearchableSelect
                             options={contratados}
                             value={selectedContratado}
+                            onSearch={handleSearchContratados}
                             onValueChange={(value) => {
                                 setSelectedContratado(value);
                                 setValue("contratado_id", value);
