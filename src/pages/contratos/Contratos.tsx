@@ -1425,10 +1425,11 @@ export function ContratosDataTable() {
                 };
 
                 // Aplicar filtros automáticos baseados no perfil
-                if (isFiscal && user?.id) {
-                    filters.fiscal_id = user.id;
-                    console.log(`🔍 Filtro Fiscal aplicado: fiscal_id=${user.id}`);
-                } else if (isGestor && user?.id) {
+                // Fiscal: NÃO envia fiscal_id aqui — o backend já isola por perfil
+                // usando o usuário autenticado (fiscal_id OR fiscal_substituto_id).
+                // Enviar fiscal_id explícito sobrescreveria esse OR e esconderia
+                // os contratos onde o usuário é apenas fiscal substituto.
+                if (isGestor && user?.id) {
                     filters.gestor_id = user.id;
                     console.log(`🔍 Filtro Gestor aplicado: gestor_id=${user.id}`);
                 } else if (isAdmin) {
@@ -1944,13 +1945,14 @@ export function ContratosDataTable() {
                                                                                         onChange={e => {
                                                                                             const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
                                                                                             const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
+                                                                                            const tipo = curr.tipo ?? "Valor";
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
+                                                                                                    tipo,
                                                                                                     valor_acrescimo,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_acrescimo })
+                                                                                                    objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -1966,13 +1968,14 @@ export function ContratosDataTable() {
                                                                                         onChange={e => {
                                                                                             const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
                                                                                             const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
+                                                                                            const tipo = curr.tipo ?? "Valor";
                                                                                             setNovoAditivo(prev => ({
                                                                                                 ...prev,
                                                                                                 [c.id]: {
                                                                                                     ...prev[c.id],
+                                                                                                    tipo,
                                                                                                     valor_supressao,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_supressao })
+                                                                                                    objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
                                                                                                 }
                                                                                             }));
                                                                                         }}
@@ -2292,13 +2295,14 @@ export function ContratosDataTable() {
                                                                                                                     onChange={e => {
                                                                                                                         const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                        const tipo = curr.tipo ?? "Valor";
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
+                                                                                                                                tipo,
                                                                                                                                 valor_acrescimo,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_acrescimo })
+                                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
@@ -2314,13 +2318,14 @@ export function ContratosDataTable() {
                                                                                                                     onChange={e => {
                                                                                                                         const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
                                                                                                                         const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                        const tipo = curr.tipo ?? "Valor";
                                                                                                                         setEditandoAditivo(prev => ({
                                                                                                                             ...prev,
                                                                                                                             [ad.id]: {
                                                                                                                                 ...prev[ad.id],
+                                                                                                                                tipo,
                                                                                                                                 valor_supressao,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, valor_supressao })
+                                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
                                                                                                                             }
                                                                                                                         }));
                                                                                                                     }}
