@@ -1209,6 +1209,10 @@ export function ContratosDataTable() {
             toast.error("Preencha tipo, descrição e data de assinatura.");
             return;
         }
+        if (dados.tipo === "Misto" && (!dados.data_inicio || !dados.nova_data_fim)) {
+            toast.error("Para aditivo Misto (valor + prazo), preencha Data Início e Nova Data Fim.");
+            return;
+        }
         setSalvandoAditivo(prev => new Set(prev).add(contratoId));
         try {
             const criado = await createTermoAditivo(contratoId, dados as TermoAditivoCreate);
@@ -1319,6 +1323,10 @@ export function ContratosDataTable() {
         const dados = editandoAditivo[aditivoId];
         if (!dados?.tipo || !dados?.objeto || !dados?.data_assinatura) {
             toast.error("Preencha tipo, descrição e data de assinatura.");
+            return;
+        }
+        if (dados.tipo === "Misto" && (!dados.data_inicio || !dados.nova_data_fim)) {
+            toast.error("Para aditivo Misto (valor + prazo), preencha Data Início e Nova Data Fim.");
             return;
         }
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
@@ -1894,7 +1902,9 @@ export function ContratosDataTable() {
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Data Início</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">
+                                                                                        Data Início{novoAditivo[c.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                    </label>
                                                                                     <Input
                                                                                         type="date"
                                                                                         className="h-8 text-xs"
@@ -1915,7 +1925,9 @@ export function ContratosDataTable() {
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Nova Data Fim</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">
+                                                                                        Nova Data Fim{novoAditivo[c.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                    </label>
                                                                                     <Input
                                                                                         type="date"
                                                                                         className="h-8 text-xs"
@@ -2244,7 +2256,9 @@ export function ContratosDataTable() {
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Data Início</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">
+                                                                                                                    Data Início{editandoAditivo[ad.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                                                </label>
                                                                                                                 <Input
                                                                                                                     type="date"
                                                                                                                     className="h-8 text-xs"
@@ -2265,7 +2279,9 @@ export function ContratosDataTable() {
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Nova Data Fim</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">
+                                                                                                                    Nova Data Fim{editandoAditivo[ad.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                                                </label>
                                                                                                                 <Input
                                                                                                                     type="date"
                                                                                                                     className="h-8 text-xs"
