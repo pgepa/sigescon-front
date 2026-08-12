@@ -1140,10 +1140,12 @@ function isDataValida(dataStr: string): boolean {
 // Valida os campos de um termo aditivo (criação ou edição) e retorna a mensagem de erro
 // listando apenas o que de fato está faltando, ou null se estiver tudo certo.
 function validarCamposAditivo(dados: Partial<TermoAditivoCreate> | undefined): string | null {
+    if (!dados) return "Preencha os campos do termo aditivo.";
+
     const faltando: string[] = [];
-    if (!dados?.tipo) faltando.push("Termo Aditivo");
-    if (!dados?.objeto) faltando.push("Descrição");
-    if (!dados?.data_assinatura) faltando.push("Data Assinatura");
+    if (!dados.tipo) faltando.push("Termo Aditivo");
+    if (!dados.objeto) faltando.push("Descrição");
+    if (!dados.data_assinatura) faltando.push("Data Assinatura");
     if (faltando.length > 0) {
         return `Preencha: ${faltando.join(", ")}.`;
     }
