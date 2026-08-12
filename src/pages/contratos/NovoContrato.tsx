@@ -61,7 +61,7 @@ const MAX_TOTAL_SIZE = 250 * 1024 * 1024; // 50MB total
 interface SearchableSelectProps {
     options: Array<{ id: number | string; nome: string }>;
     value: string;
-    onValueChange: (value: string) => void;
+    onValueChange: (value: string, label?: string) => void;
     placeholder: string;
     canCreateNew?: boolean;
     onCreateNew?: () => void;
@@ -71,9 +71,13 @@ interface SearchableSelectProps {
     // filtrar apenas a lista local de `options` — necessário quando há mais itens do que
     // a página inicial carrega.
     onSearch?: (term: string) => void;
+    // Rótulo do item atualmente selecionado, usado como fallback quando ele não está
+    // presente em `options` (ex.: depois que uma nova busca no servidor substitui a lista
+    // e o item escolhido não está entre os resultados retornados).
+    selectedLabel?: string;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", onSearch }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", onSearch, selectedLabel }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
@@ -116,9 +120,10 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
     }, [isOpen]);
 
     const selectedOption = options.find(option => option.id.toString() === value);
+    const displayLabel = selectedOption?.nome ?? (value ? selectedLabel : undefined);
 
-    const handleSelect = (optionValue: string) => {
-        onValueChange(optionValue);
+    const handleSelect = (option: { id: number | string; nome: string }) => {
+        onValueChange(option.id.toString(), option.nome);
         setIsOpen(false);
         setSearchTerm("");
     };
@@ -135,8 +140,8 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-left bg-white border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors hover:border-blue-400"
             >
-                <span className={`block truncate ${!selectedOption ? 'text-gray-500' : 'text-blue-900'}`}>
-                    {selectedOption ? selectedOption.nome : placeholder}
+                <span className={`block truncate ${!displayLabel ? 'text-gray-500' : 'text-blue-900'}`}>
+                    {displayLabel ?? placeholder}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-blue-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -168,9 +173,9 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                         </div>
                         {options.length > 0 && (
                             <div className="mt-2 text-xs text-blue-600 flex items-center justify-between">
-                                <span>{filteredOptions.length} de {options.length} usuários</span>
+                                <span>{filteredOptions.length} de {options.length} itens</span>
                                 {!onSearch && options.length >= 100 && (
-                                    <span className="text-amber-600">⚠ Lista limitada a 100 usuários</span>
+                                    <span className="text-amber-600">⚠ Lista limitada a 100 itens</span>
                                 )}
                             </div>
                         )}
@@ -184,7 +189,7 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                                     <button
                                         key={option.id}
                                         type="button"
-                                        onClick={() => handleSelect(option.id.toString())}
+                                        onClick={() => handleSelect(option)}
                                         className={`w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors border-b border-blue-50 ${
                                             value === option.id.toString()
                                                 ? 'bg-blue-100 text-blue-900 font-medium'
@@ -278,6 +283,7 @@ export function NovoContrato() {
 
     // Estados para controlar os valores dos selects customizados
     const [selectedContratado, setSelectedContratado] = useState("");
+    const [selectedContratadoNome, setSelectedContratadoNome] = useState("");
     const [selectedGestor, setSelectedGestor] = useState("");
     const [selectedFiscal, setSelectedFiscal] = useState("");
     const [selectedFiscalSubstituto, setSelectedFiscalSubstituto] = useState("");
@@ -1037,9 +1043,11 @@ export function NovoContrato() {
                         <SearchableSelect
                             options={contratados}
                             value={selectedContratado}
+                            selectedLabel={selectedContratadoNome}
                             onSearch={handleSearchContratados}
-                            onValueChange={(value) => {
+                            onValueChange={(value, label) => {
                                 setSelectedContratado(value);
+                                setSelectedContratadoNome(label ?? "");
                                 setValue("contratado_id", value);
                             }}
                             placeholder="Selecione um contratado"

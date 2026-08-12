@@ -1082,6 +1082,7 @@ const columns: ColumnDef<ContratoList>[] = [
     { accessorKey: "gestor_id" },
     { accessorKey: "fiscal_id" },
     { accessorKey: "data_fim" },
+    { accessorKey: "total_aditivos" },
     // Colunas virtuais para filtros de vencimento
     { accessorKey: "vencimento_30_dias" },
     { accessorKey: "vencimento_60_dias" },
@@ -1123,6 +1124,67 @@ function gerarDescricaoAditivo(campos: CamposDescricaoAditivo): string {
         return `Aditamento de valor e prazo - ${descricaoValor()} - ${descricaoVigencia()}`;
     }
     return "";
+}
+
+// Verifica se uma data no formato do <input type="date"> (YYYY-MM-DD) é uma data real e
+// plausível — pega tanto formatos corrompidos (ano com dígitos a mais) quanto datas
+// inexistentes (ex.: 30/02).
+function isDataValida(dataStr: string): boolean {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataStr)) return false;
+    const [ano, mes, dia] = dataStr.split("-").map(Number);
+    if (ano < 1900 || ano > 2100) return false;
+    const d = new Date(ano, mes - 1, dia);
+    return d.getFullYear() === ano && d.getMonth() === mes - 1 && d.getDate() === dia;
+}
+
+// Valida os campos de um termo aditivo (criação ou edição) e retorna a mensagem de erro
+// listando apenas o que de fato está faltando, ou null se estiver tudo certo.
+function validarCamposAditivo(dados: Partial<TermoAditivoCreate> | undefined): string | null {
+    const faltando: string[] = [];
+    if (!dados?.tipo) faltando.push("Termo Aditivo");
+    if (!dados?.objeto) faltando.push("Descrição");
+    if (!dados?.data_assinatura) faltando.push("Data Assinatura");
+    if (faltando.length > 0) {
+        return `Preencha: ${faltando.join(", ")}.`;
+    }
+
+    const camposData: Array<[string, string | null | undefined]> = [
+        ["Data Assinatura", dados.data_assinatura],
+        ["Data Início", dados.data_inicio],
+        ["Nova Data Fim", dados.nova_data_fim],
+        ["Data Publicação", dados.data_publicacao],
+    ];
+    for (const [nomeCampo, valor] of camposData) {
+        if (valor && !isDataValida(valor)) {
+            return `${nomeCampo} inválida. Use o formato DD/MM/AAAA com um ano de 4 dígitos.`;
+        }
+    }
+
+    if (dados.tipo === "Misto" || dados.tipo === "Prazo") {
+        const faltandoData: string[] = [];
+        if (!dados.data_inicio) faltandoData.push("Data Início");
+        if (!dados.nova_data_fim) faltandoData.push("Nova Data Fim");
+        if (faltandoData.length > 0) {
+            return `Preencha: ${faltandoData.join(", ")}.`;
+        }
+    }
+
+    if ((dados.tipo === "Misto" || dados.tipo === "Valor") && !dados.valor_acrescimo && !dados.valor_supressao) {
+        return `Para aditivo ${dados.tipo}, preencha Valor Acréscimo ou Valor Supressão.`;
+    }
+
+    // Data Início e Nova Data Fim representam uma mudança de vigência e não fazem
+    // sentido preenchidas parcialmente — se uma foi informada, a outra também precisa ser
+    // (em Misto/Prazo isso já é garantido acima; aqui cobre o caso de Valor com só uma data).
+    if (!!dados.data_inicio !== !!dados.nova_data_fim) {
+        return "Preencha: Data Início e Nova Data Fim juntos, ou deixe os dois em branco.";
+    }
+
+    if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
+        return "Nova Data Fim não pode ser anterior à Data Início.";
+    }
+
+    return null;
 }
 
 export function ContratosDataTable() {
@@ -1205,12 +1267,9 @@ export function ContratosDataTable() {
     const handleSalvarAditivo = async (contratoId: number, e: React.MouseEvent) => {
         e.stopPropagation();
         const dados = novoAditivo[contratoId];
-        if (!dados?.tipo || !dados?.objeto || !dados?.data_assinatura) {
-            toast.error("Preencha tipo, descrição e data de assinatura.");
-            return;
-        }
-        if (dados.tipo === "Misto" && (!dados.data_inicio || !dados.nova_data_fim)) {
-            toast.error("Para aditivo Misto (valor + prazo), preencha Data Início e Nova Data Fim.");
+        const erroValidacao = validarCamposAditivo(dados);
+        if (erroValidacao) {
+            toast.error(erroValidacao);
             return;
         }
         setSalvandoAditivo(prev => new Set(prev).add(contratoId));
@@ -1321,12 +1380,9 @@ export function ContratosDataTable() {
     const handleSalvarEdicaoAditivo = async (contratoId: number, aditivoId: number, e: React.MouseEvent) => {
         e.stopPropagation();
         const dados = editandoAditivo[aditivoId];
-        if (!dados?.tipo || !dados?.objeto || !dados?.data_assinatura) {
-            toast.error("Preencha tipo, descrição e data de assinatura.");
-            return;
-        }
-        if (dados.tipo === "Misto" && (!dados.data_inicio || !dados.nova_data_fim)) {
-            toast.error("Para aditivo Misto (valor + prazo), preencha Data Início e Nova Data Fim.");
+        const erroValidacao = validarCamposAditivo(dados);
+        if (erroValidacao) {
+            toast.error(erroValidacao);
             return;
         }
         setSalvandoEdicaoAditivo(prev => new Set(prev).add(aditivoId));
@@ -1647,7 +1703,15 @@ export function ContratosDataTable() {
                                                     {table.getColumn("data_fim")?.getIsSorted() === "asc" ? " ↑" : table.getColumn("data_fim")?.getIsSorted() === "desc" ? " ↓" : " ↕"}
                                                 </span>
                                             </TableHead>
-                                            <TableHead className="w-[100px] text-xs font-semibold text-gray-600 uppercase tracking-wider">Aditivos</TableHead>
+                                            <TableHead
+                                                className="w-[100px] text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer select-none hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+                                                onClick={table.getColumn("total_aditivos")?.getToggleSortingHandler()}
+                                            >
+                                                <span className="flex items-center gap-1">
+                                                    Aditivos
+                                                    {table.getColumn("total_aditivos")?.getIsSorted() === "asc" ? " ↑" : table.getColumn("total_aditivos")?.getIsSorted() === "desc" ? " ↓" : " ↕"}
+                                                </span>
+                                            </TableHead>
                                             <TableHead className="w-[80px] text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">Ações</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -1903,7 +1967,7 @@ export function ContratosDataTable() {
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
                                                                                     <label className="text-xs font-medium text-gray-600">
-                                                                                        Data Início{novoAditivo[c.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                        Data Início{(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Prazo") ? " *" : ""}
                                                                                     </label>
                                                                                     <Input
                                                                                         type="date"
@@ -1926,7 +1990,7 @@ export function ContratosDataTable() {
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
                                                                                     <label className="text-xs font-medium text-gray-600">
-                                                                                        Nova Data Fim{novoAditivo[c.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                        Nova Data Fim{(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Prazo") ? " *" : ""}
                                                                                     </label>
                                                                                     <Input
                                                                                         type="date"
@@ -1948,7 +2012,7 @@ export function ContratosDataTable() {
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$)</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$){(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Valor") ? " *" : ""}</label>
                                                                                     <Input
                                                                                         type="number"
                                                                                         className="h-8 text-xs"
@@ -1971,7 +2035,7 @@ export function ContratosDataTable() {
                                                                                     />
                                                                                 </div>
                                                                                 <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Valor Supressão (R$)</label>
+                                                                                    <label className="text-xs font-medium text-gray-600">Valor Supressão (R$){(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Valor") ? " *" : ""}</label>
                                                                                     <Input
                                                                                         type="number"
                                                                                         className="h-8 text-xs"
@@ -2257,7 +2321,7 @@ export function ContratosDataTable() {
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
                                                                                                                 <label className="text-xs font-medium text-gray-600">
-                                                                                                                    Data Início{editandoAditivo[ad.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                                                    Data Início{(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Prazo") ? " *" : ""}
                                                                                                                 </label>
                                                                                                                 <Input
                                                                                                                     type="date"
@@ -2280,7 +2344,7 @@ export function ContratosDataTable() {
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
                                                                                                                 <label className="text-xs font-medium text-gray-600">
-                                                                                                                    Nova Data Fim{editandoAditivo[ad.id]?.tipo === "Misto" ? " *" : ""}
+                                                                                                                    Nova Data Fim{(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Prazo") ? " *" : ""}
                                                                                                                 </label>
                                                                                                                 <Input
                                                                                                                     type="date"
@@ -2302,7 +2366,7 @@ export function ContratosDataTable() {
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$)</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$){(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Valor") ? " *" : ""}</label>
                                                                                                                 <Input
                                                                                                                     type="number"
                                                                                                                     className="h-8 text-xs"
@@ -2325,7 +2389,7 @@ export function ContratosDataTable() {
                                                                                                                 />
                                                                                                             </div>
                                                                                                             <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Supressão (R$)</label>
+                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Supressão (R$){(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Valor") ? " *" : ""}</label>
                                                                                                                 <Input
                                                                                                                     type="number"
                                                                                                                     className="h-8 text-xs"
