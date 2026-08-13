@@ -1175,6 +1175,16 @@ function validarCamposAditivo(dados: Partial<TermoAditivoCreate> | undefined): s
         return `Para aditivo ${dados.tipo}, preencha Valor Acréscimo ou Valor Supressão.`;
     }
 
+    // Prazo e Valor são mutuamente exclusivos quanto ao que alteram — se precisar dos dois,
+    // o tipo correto é Misto. Isso evita um aditivo "Prazo" carregando valor, ou um
+    // "Valor" carregando data, o que tornaria o tipo Misto redundante.
+    if (dados.tipo === "Prazo" && (dados.valor_acrescimo || dados.valor_supressao)) {
+        return "Aditivo de Prazo não pode ter Valor Acréscimo ou Valor Supressão preenchido. Use o tipo Misto.";
+    }
+    if (dados.tipo === "Valor" && (dados.data_inicio || dados.nova_data_fim)) {
+        return "Aditivo de Valor não pode ter Data Início ou Nova Data Fim preenchido. Use o tipo Misto.";
+    }
+
     // Data Início e Nova Data Fim representam uma mudança de vigência e não fazem
     // sentido preenchidas parcialmente — se uma foi informada, a outra também precisa ser
     // (em Misto/Prazo isso já é garantido acima; aqui cobre o caso de Valor com só uma data).
