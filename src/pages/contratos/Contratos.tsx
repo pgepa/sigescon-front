@@ -22,6 +22,7 @@ import {
     IconPencil,
     IconDownload,
     IconUpload,
+    IconTrash,
 } from "@tabler/icons-react";
 import {
     type ColumnDef,
@@ -54,6 +55,7 @@ import {
     createTermoAditivo,
     updateTermoAditivo,
     deleteTermoAditivo,
+    deleteTermoAditivoDefinitivamente,
     uploadArquivoAditivo,
     //downloadArquivoContrato,
     downloadArquivoAditivo,
@@ -1346,12 +1348,24 @@ export function ContratosDataTable() {
         e.stopPropagation();
         try {
             await deleteTermoAditivo(contratoId, aditivoId);
-            // Recarrega lista para mostrar o aditivo como inativo
+            // Recarrega lista para mostrar o aditivo como inativo (ele continua na lista)
             const res = await getTermosAditivos(contratoId);
             setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
             toast.success("Termo aditivo inativado.");
         } catch {
-            toast.error("Erro ao excluir termo aditivo.");
+            toast.error("Erro ao inativar termo aditivo.");
+        }
+    };
+
+    const handleExcluirAditivoDefinitivo = async (contratoId: number, aditivoId: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            await deleteTermoAditivoDefinitivamente(contratoId, aditivoId);
+            const res = await getTermosAditivos(contratoId);
+            setAditivosMap(prev => ({ ...prev, [contratoId]: res.data }));
+            toast.success("Termo aditivo excluído definitivamente.");
+        } catch {
+            toast.error("Erro ao excluir termo aditivo definitivamente.");
         }
     };
 
@@ -2171,20 +2185,24 @@ export function ContratosDataTable() {
                                                                                     </thead>
                                                                                     <tbody className="bg-white divide-y divide-indigo-50">
                                                                                         {[...(aditivosMap[c.id] ?? [])]
-                                                                                            .filter(ad => ad.ativo !== false)
                                                                                             .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
                                                                                             .map((ad, idx) => {
                                                                                             const hoje = new Date(); hoje.setHours(0,0,0,0);
                                                                                             const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
-                                                                                            const vigente = !expirado;
+                                                                                            const inativo = ad.ativo === false;
+                                                                                            const vigente = !expirado && !inativo;
                                                                                             const numeroExibido = idx + 1;
                                                                                             return (
                                                                                             <React.Fragment key={ad.id}>
-                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors"}>
+                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors opacity-70"}>
                                                                                                 <td className="px-3 py-2 font-bold text-indigo-700">
                                                                                                     <div className="flex items-center gap-1.5">
                                                                                                         <span>{numeroExibido}º</span>
-                                                                                                        {vigente ? (
+                                                                                                        {inativo ? (
+                                                                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 uppercase tracking-wide">
+                                                                                                                Inativo
+                                                                                                            </span>
+                                                                                                        ) : vigente ? (
                                                                                                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 uppercase tracking-wide">
                                                                                                                 Ativo
                                                                                                             </span>
@@ -2276,6 +2294,34 @@ export function ContratosDataTable() {
                                                                                                                     </AlertDialogFooter>
                                                                                                                 </AlertDialogContent>
                                                                                                             </AlertDialog>}
+                                                                                                            <AlertDialog>
+                                                                                                                <AlertDialogTrigger asChild>
+                                                                                                                    <button
+                                                                                                                        onClick={e => e.stopPropagation()}
+                                                                                                                        className="text-red-600 hover:text-red-800 transition-colors"
+                                                                                                                        title="Excluir definitivamente"
+                                                                                                                    >
+                                                                                                                        <IconTrash className="h-3.5 w-3.5" />
+                                                                                                                    </button>
+                                                                                                                </AlertDialogTrigger>
+                                                                                                                <AlertDialogContent onClick={e => e.stopPropagation()}>
+                                                                                                                    <AlertDialogHeader>
+                                                                                                                        <AlertDialogTitle>Excluir {ad.numero_aditivo}º Aditivo definitivamente?</AlertDialogTitle>
+                                                                                                                        <AlertDialogDescription>
+                                                                                                                            Essa ação remove o termo aditivo do banco de dados de vez — diferente de "Inativar", não tem como desfazer.
+                                                                                                                        </AlertDialogDescription>
+                                                                                                                    </AlertDialogHeader>
+                                                                                                                    <AlertDialogFooter>
+                                                                                                                        <AlertDialogCancel onClick={e => e.stopPropagation()}>Cancelar</AlertDialogCancel>
+                                                                                                                        <AlertDialogAction
+                                                                                                                            className="bg-red-600 hover:bg-red-700"
+                                                                                                                            onClick={e => handleExcluirAditivoDefinitivo(c.id, ad.id, e)}
+                                                                                                                        >
+                                                                                                                            Excluir definitivamente
+                                                                                                                        </AlertDialogAction>
+                                                                                                                    </AlertDialogFooter>
+                                                                                                                </AlertDialogContent>
+                                                                                                            </AlertDialog>
                                                                                                         </div>
                                                                                                     </td>
                                                                                                 )}

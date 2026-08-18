@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -11,7 +12,8 @@ import {
   publicDownloadArquivo,
   publicGetStatus,
   publicGetContratados,
-  type Contrato, type Contratado, type Status, type TermoAditivo,
+  publicGetModalidades,
+  type Contrato, type Contratado, type Status, type TermoAditivo, type Modalidade,
 } from "@/lib/api";
 import brasaoPara from "@/assets/logo.svg";
 
@@ -323,6 +325,10 @@ function ModalDetalhes({
 // ── página principal ──────────────────────────────────────────────────────────
 
 export default function RelatorioContratos() {
+  // Permite montar links externos que já abrem o relatório filtrado por modalidade,
+  // ex.: /#/relatorio-contratos?modalidade_id=5
+  const [searchParams] = useSearchParams();
+
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -334,11 +340,13 @@ export default function RelatorioContratos() {
   const [searchInput, setSearchInput] = useState("");
   const [statusId, setStatusId] = useState("");
   const [contratadoId, setContratadoId] = useState("");
+  const [modalidadeId, setModalidadeId] = useState(() => searchParams.get("modalidade_id") ?? "");
   const [dataInicio, setDataInicio] = useState("");
   const [dataFim, setDataFim] = useState("");
 
   const [statusList, setStatusList] = useState<Status[]>([]);
   const [contratadosList, setContratadosList] = useState<Contratado[]>([]);
+  const [modalidadesList, setModalidadesList] = useState<Modalidade[]>([]);
 
   const [contratoModal, setContratoModal] = useState<Contrato | null>(null);
 
@@ -347,6 +355,7 @@ export default function RelatorioContratos() {
   useEffect(() => {
     publicGetStatus().then(setStatusList).catch(() => {});
     publicGetContratados().then(r => setContratadosList(r.data)).catch(() => {});
+    publicGetModalidades().then(setModalidadesList).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {
@@ -356,6 +365,7 @@ export default function RelatorioContratos() {
       if (search) filters.search = search;
       if (statusId) filters.status_id = statusId;
       if (contratadoId) filters.contratado_id = contratadoId;
+      if (modalidadeId) filters.modalidade_id = modalidadeId;
       if (dataInicio) filters.data_inicio = dataInicio;
       if (dataFim) filters.data_fim = dataFim;
       const r = await publicGetContratos(filters);
@@ -371,7 +381,7 @@ export default function RelatorioContratos() {
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, statusId, contratadoId, dataInicio, dataFim]);
+  }, [page, perPage, search, statusId, contratadoId, modalidadeId, dataInicio, dataFim]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -411,12 +421,15 @@ export default function RelatorioContratos() {
   const de = (page - 1) * perPage + 1;
   const ate = Math.min(page * perPage, totalItems);
 
+  const modalidadeSelecionada = modalidadesList.find(m => String(m.id) === modalidadeId);
+  const tituloRelatorio = modalidadeSelecionada
+    ? `Relatório de Contratos — ${modalidadeSelecionada.nome.toUpperCase()}`
+    : "Relatório de Contratos — SIGESCON";
+
   return (
     <>
       <style>{`
         @media print {
-          body > *:not(#relatorio-root) { display: none !important; }
-          #relatorio-root { display: block !important; }
           .no-print { display: none !important; }
         }
       `}</style>
@@ -452,7 +465,7 @@ export default function RelatorioContratos() {
         <div className="bg-[#1565C0] text-white px-6 py-3">
           <div className="w-full">
             <h1 className="text-lg font-bold uppercase tracking-wider">
-              Relatório de Contratos — SIGESCON
+              {tituloRelatorio}
             </h1>
           </div>
         </div>
@@ -498,7 +511,7 @@ export default function RelatorioContratos() {
           </div>
 
           {/* Filtros avançados */}
-          <div className="no-print mb-4 grid grid-cols-2 sm:grid-cols-4 gap-3 bg-gray-50 border border-gray-200 rounded p-3">
+          <div className="no-print mb-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 bg-gray-50 border border-gray-200 rounded p-3">
             <div>
               <label className="text-[11px] font-semibold text-gray-500 uppercase">Situação</label>
               <select value={statusId} onChange={e => { setStatusId(e.target.value); setPage(1); }}
@@ -513,6 +526,14 @@ export default function RelatorioContratos() {
                 className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs">
                 <option value="">Todos</option>
                 {contratadosList.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-gray-500 uppercase">Modalidade</label>
+              <select value={modalidadeId} onChange={e => { setModalidadeId(e.target.value); setPage(1); }}
+                className="mt-1 w-full border border-gray-300 rounded px-2 py-1 text-xs">
+                <option value="">Todas</option>
+                {modalidadesList.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
               </select>
             </div>
             <div>

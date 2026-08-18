@@ -2816,7 +2816,7 @@ export async function uploadArquivoAditivo(
 }
 
 /**
- * Exclui um termo aditivo (soft delete)
+ * Inativa um termo aditivo (soft delete) — continua existindo e visível na lista.
  * DELETE /api/v1/contratos/{id}/aditivos/{aditivo_id}
  */
 export async function deleteTermoAditivo(
@@ -2824,6 +2824,19 @@ export async function deleteTermoAditivo(
     aditivoId: number
 ): Promise<{ message: string }> {
     return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+        method: "DELETE",
+    });
+}
+
+/**
+ * Exclui um termo aditivo definitivamente (hard delete) — remove do banco de vez.
+ * DELETE /api/v1/contratos/{id}/aditivos/{aditivo_id}/permanente
+ */
+export async function deleteTermoAditivoDefinitivamente(
+    contratoId: number,
+    aditivoId: number
+): Promise<{ message: string }> {
+    return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}/permanente`, {
         method: "DELETE",
     });
 }
@@ -2947,4 +2960,8 @@ export function publicGetStatus(): Promise<Status[]> {
 
 export function publicGetContratados(): Promise<{ data: Contratado[]; total: number }> {
     return publicApi<{ data: Contratado[]; total: number }>(`/public/contratados`).catch(() => ({ data: [], total: 0 }));
+}
+
+export function publicGetModalidades(): Promise<Modalidade[]> {
+    return publicApi<Modalidade[]>(`/public/modalidades`).catch(() => []);
 }
