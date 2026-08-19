@@ -2725,7 +2725,7 @@ export type TermoAditivo = {
     id: number;
     contrato_id: number;
     numero_aditivo: number;
-    tipo: "Prazo" | "Valor" | "Objeto" | "Misto";
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
     objeto: string;
     data_assinatura: string;
     data_publicacao: string | null;
@@ -2741,7 +2741,7 @@ export type TermoAditivo = {
 };
 
 export type TermoAditivoCreate = {
-    tipo: "Prazo" | "Valor" | "Objeto" | "Misto";
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
     objeto: string;
     data_assinatura: string;
     data_publicacao?: string | null;
@@ -2839,6 +2839,56 @@ export async function deleteTermoAditivoDefinitivamente(
     return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}/permanente`, {
         method: "DELETE",
     });
+}
+
+// ============================================================================
+// GESTÃO DE TERMOS ADITIVOS (relatório consolidado, todos os contratos)
+// ============================================================================
+
+export type TermoAditivoRelatorioItem = {
+    id: number;
+    contrato_id: number;
+    numero_aditivo: number;
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao: string | null;
+    data_inicio: string | null;
+    nova_data_fim: string | null;
+    valor_acrescimo: number | null;
+    valor_supressao: number | null;
+    pae: string | null;
+    ativo: boolean;
+    arquivo_id: number | null;
+    arquivo_nome: string | null;
+    nr_contrato: string;
+    contrato_objeto: string;
+    contratado_nome: string | null;
+    status_calc: "Ativo" | "Vencido" | "Inativo";
+};
+
+export type TermoAditivoRelatorioPaginated = {
+    data: TermoAditivoRelatorioItem[];
+    total_items: number;
+    total_pages: number;
+    current_page: number;
+    per_page: number;
+};
+
+/**
+ * Relatório consolidado de termos aditivos de todos os contratos.
+ * GET /api/v1/aditivos/relatorio
+ */
+export function getRelatorioTermosAditivos(
+    filters: Record<string, any>
+): Promise<TermoAditivoRelatorioPaginated> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return api<TermoAditivoRelatorioPaginated>(`/aditivos/relatorio?${params.toString()}`);
 }
 
 // ============================================================================

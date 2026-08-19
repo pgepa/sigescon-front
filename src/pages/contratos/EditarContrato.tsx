@@ -372,8 +372,10 @@ export function EditarContrato() {
     async function onSubmit(data: ContractFormData) {
         const hasFormChanges = Object.keys(dirtyFields).length > 0;
         const hasNewFiles = newFiles.length > 0;
+        const hasNewPortaria = !!selectedPortariaFile;
+        const hasNewAta = !!selectedAtaFile;
 
-        if (!hasFormChanges && !hasNewFiles && !fileWasDeleted) {
+        if (!hasFormChanges && !hasNewFiles && !hasNewPortaria && !hasNewAta && !fileWasDeleted) {
             toast.info("Nenhuma alteração foi realizada para salvar.");
             return;
         }

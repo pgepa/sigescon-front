@@ -10,6 +10,7 @@ import {
   IconSettings,
   IconReportAnalytics,
   IconUserCheck,
+  IconFilePlus,
 } from "@tabler/icons-react"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -74,6 +75,11 @@ const getNavigationByProfile = (perfilNome: string) => {
           title: "Gestão de Responsáveis",
           url: "/gestao-responsaveis",
           icon: IconUserCheck,
+        },
+        {
+          title: "Gestão de Termos Aditivos",
+          url: "/gestao-termos-aditivos",
+          icon: IconFilePlus,
         },
         {
           title: "Relatório Contratos",

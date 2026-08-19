@@ -1094,6 +1094,13 @@ const columns: ColumnDef<ContratoList>[] = [
     { accessorKey: "garantia_prazo_dias" },
 ];
 
+const TIPOS_ADITIVO_OPTIONS: Array<{ value: TermoAditivoCreate["tipo"]; label: string }> = [
+    { value: "Prazo", label: "Prazo" },
+    { value: "Valor", label: "Valor" },
+    { value: "Misto", label: "Misto (Valor + Prazo)" },
+    { value: "Outros", label: "Outros" },
+];
+
 type CamposDescricaoAditivo = Pick<
     Partial<TermoAditivoCreate>,
     "tipo" | "data_assinatura" | "data_inicio" | "nova_data_fim" | "valor_acrescimo" | "valor_supressao"
@@ -1808,11 +1815,11 @@ export function ContratosDataTable() {
                                                                         <span className="animate-pulse w-4 text-center">…</span>
                                                                     ) : (
                                                                         <span className={`inline-flex items-center justify-center rounded-full w-5 h-5 text-xs font-bold ${
-                                                                            (aditivosMap[c.id]?.filter(a => a.ativo !== false).length ?? c.total_aditivos) > 0
+                                                                            (aditivosMap[c.id]?.length ?? c.total_aditivos) > 0
                                                                                 ? "bg-indigo-100 text-indigo-700"
                                                                                 : "bg-gray-100 text-gray-500"
                                                                         }`}>
-                                                                            {aditivosMap[c.id]?.filter(a => a.ativo !== false).length ?? c.total_aditivos}
+                                                                            {aditivosMap[c.id]?.length ?? c.total_aditivos}
                                                                         </span>
                                                                     )}
                                                                     <IconChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${isExpanded ? "rotate-180" : ""}`} />
@@ -1964,8 +1971,8 @@ export function ContratosDataTable() {
                                                                                     >
                                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                         <SelectContent>
-                                                                                            {["Prazo", "Valor", "Misto"].map(t => (
-                                                                                                <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                                                                                            {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
+                                                                                                <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
                                                                                             ))}
                                                                                         </SelectContent>
                                                                                     </Select>
@@ -2350,9 +2357,9 @@ export function ContratosDataTable() {
                                                                                                                 >
                                                                                                                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                                                     <SelectContent>
-                                                                                                                        <SelectItem value="Prazo">Prazo</SelectItem>
-                                                                                                                        <SelectItem value="Valor">Valor</SelectItem>
-                                                                                                                        <SelectItem value="Misto">Misto (Valor + Prazo)</SelectItem>
+                                                                                                                        {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
+                                                                                                                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                                                                                        ))}
                                                                                                                     </SelectContent>
                                                                                                                 </Select>
                                                                                                             </div>
