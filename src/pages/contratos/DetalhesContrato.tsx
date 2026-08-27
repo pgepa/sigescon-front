@@ -16,7 +16,10 @@ import {
   getContratoDetalhado,
   getPendenciasByContratoId,
   cancelarPendencia,
-  type ContratoDetalhado
+  getTermosAditivos,
+  downloadArquivoAditivo,
+  type ContratoDetalhado,
+  type TermoAditivo
 } from "@/lib/api";
 import { toast } from "sonner";
 import { ContratoArquivos } from "@/components/ContratoArquivos";
@@ -44,6 +47,7 @@ export default function DetalhesContrato() {
 
   const [contrato, setContrato] = useState<ContratoDetalhado | null>(null);
   const [pendencias, setPendencias] = useState<Pendencia[]>([]);
+  const [aditivos, setAditivos] = useState<TermoAditivo[]>([]);
   const [loading, setLoading] = useState(true);
 
   const podeEditar = perfilAtivo?.nome === "Administrador";
@@ -113,6 +117,15 @@ export default function DetalhesContrato() {
         } catch (error) {
           console.log("Nenhuma pendência encontrada", error);
           setPendencias([]);
+        }
+
+        // Carregar termos aditivos
+        try {
+          const aditivosResponse = await getTermosAditivos(parseInt(id));
+          setAditivos(aditivosResponse.data);
+        } catch (error) {
+          console.log("Nenhum termo aditivo encontrado", error);
+          setAditivos([]);
         }
 
 
@@ -255,9 +268,9 @@ export default function DetalhesContrato() {
                 <p className="font-semibold text-gray-800 mt-0.5">{contrato.modalidade_nome || "—"}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência</p>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência Original</p>
                 <p className="font-semibold text-gray-800 mt-0.5">
-                  {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim)}
+                  {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim_original ?? contrato.data_fim)}
                 </p>
               </div>
               <div>
@@ -317,11 +330,12 @@ export default function DetalhesContrato() {
           </CardContent>
         </Card>
 
-        {/* Gerenciamento de Arquivos e Pendências */}
+        {/* Gerenciamento de Arquivos, Pendências e Termos Aditivos */}
         <Tabs defaultValue="arquivos" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="arquivos">📁 Arquivos</TabsTrigger>
             <TabsTrigger value="pendencias">⚠️ Pendências</TabsTrigger>
+            <TabsTrigger value="aditivos">📄 Termos Aditivos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="arquivos" className="space-y-4">
@@ -437,6 +451,98 @@ export default function DetalhesContrato() {
                   <div className="text-center py-8">
                     <CheckCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <p className="text-sm text-gray-500">Nenhuma pendência encontrada</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="aditivos" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Termos Aditivos ({aditivos.length})</CardTitle>
+                <CardDescription>Termos aditivos relacionados ao contrato</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {aditivos.length === 0 ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Nenhum termo aditivo cadastrado</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Nº</th>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Status</th>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Tipo</th>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Descrição</th>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Assinatura</th>
+                          <th className="text-left px-3 py-2 font-medium text-gray-600">Nova Vigência</th>
+                          <th className="text-right px-3 py-2 font-medium text-gray-600">Acréscimo</th>
+                          <th className="text-right px-3 py-2 font-medium text-gray-600">Supressão</th>
+                          <th className="text-center px-3 py-2 font-medium text-gray-600">Arquivo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {[...aditivos]
+                          .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
+                          .map((ad, idx) => {
+                            const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+                            const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
+                            const inativo = ad.ativo === false;
+                            const statusLabel = inativo ? "Inativo" : expirado ? "Vencido" : "Ativo";
+                            const statusClasse = inativo
+                              ? "bg-gray-200 text-gray-600"
+                              : expirado
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-green-100 text-green-700";
+                            return (
+                              <tr key={ad.id} className="hover:bg-gray-50">
+                                <td className="px-3 py-2 font-semibold text-indigo-700">{idx + 1}º</td>
+                                <td className="px-3 py-2">
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${statusClasse}`}>
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">{ad.tipo}</td>
+                                <td className="px-3 py-2 max-w-[220px] truncate" title={ad.objeto}>{ad.objeto}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{formatDate(ad.data_assinatura)}</td>
+                                <td className="px-3 py-2 whitespace-nowrap">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
+                                <td className="px-3 py-2 text-right whitespace-nowrap">{ad.valor_supressao ? formatCurrency(ad.valor_supressao) : "—"}</td>
+                                <td className="px-3 py-2 text-center">
+                                  {ad.arquivo_id ? (
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const blob = await downloadArquivoAditivo(ad.arquivo_id!);
+                                          const url = URL.createObjectURL(blob);
+                                          const a = document.createElement("a");
+                                          a.href = url;
+                                          a.download = ad.arquivo_nome ?? `${ad.numero_aditivo}o_termo_aditivo`;
+                                          a.click();
+                                          URL.revokeObjectURL(url);
+                                        } catch {
+                                          toast.error("Erro no download.");
+                                        }
+                                      }}
+                                      className="text-indigo-500 hover:text-indigo-700"
+                                      title={ad.arquivo_nome ?? "Baixar arquivo"}
+                                    >
+                                      ⬇
+                                    </button>
+                                  ) : (
+                                    <span className="text-gray-300">—</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </CardContent>
