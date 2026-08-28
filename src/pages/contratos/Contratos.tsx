@@ -2195,9 +2195,10 @@ export function ContratosDataTable() {
                                                                                             .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
                                                                                             .map((ad, idx) => {
                                                                                             const hoje = new Date(); hoje.setHours(0,0,0,0);
-                                                                                            const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
-                                                                                            const inativo = ad.ativo === false;
-                                                                                            const vigente = !expirado && !inativo;
+                                                                                            const expiradoFallback = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
+                                                                                            const inativoFallback = ad.ativo === false;
+                                                                                            const inativo = ad.status ? ad.status === "Inativo" : inativoFallback;
+                                                                                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback);
                                                                                             const numeroExibido = idx + 1;
                                                                                             return (
                                                                                             <React.Fragment key={ad.id}>

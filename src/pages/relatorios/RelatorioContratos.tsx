@@ -220,9 +220,11 @@ function ModalDetalhes({
                       .sort((a, b) => a.numero_aditivo - b.numero_aditivo)
                       .map((ad, idx) => {
                       const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
-                      const expirado = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
-                      const inativo = ad.ativo === false;
-                      const statusLabel = inativo ? "Inativo" : expirado ? "Vencido" : "Ativo";
+                      const expiradoFallback = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
+                      const inativoFallback = ad.ativo === false;
+                      const expirado = ad.status ? ad.status === "Vencido" : expiradoFallback;
+                      const inativo = ad.status ? ad.status === "Inativo" : inativoFallback;
+                      const statusLabel = ad.status ?? (inativo ? "Inativo" : expirado ? "Vencido" : "Ativo");
                       const statusClasse = inativo
                         ? "bg-gray-200 text-gray-600"
                         : expirado
