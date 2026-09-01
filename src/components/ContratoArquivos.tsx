@@ -12,7 +12,6 @@ import {
   IconUser,
   IconAlertTriangle,
   IconClipboardList,
-  IconX,
   IconEye,
 } from "@tabler/icons-react";
 import { FileText } from "lucide-react";
@@ -50,7 +49,6 @@ import {
   getUrlPdfRelatorioSalvo,
   getUrlPdfVisualizarRelatorio,
   enviarRelatorioParaGestor,
-  revisarRelatorio,
   type ModeloRelatorioInfo,
   type RelatorioFiscalizacaoItem,
   type RelatorioFiscalizacaoFormData,
@@ -96,12 +94,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
   } | null>(null);
   const [carregandoEdicao, setCarregandoEdicao] = useState<number | null>(null);
   const [enviando, setEnviando] = useState<number | null>(null);
-  const [revisando, setRevisando] = useState<number | null>(null);
-  const [naoConformeDialog, setNaoConformeDialog] = useState<{
-    open: boolean;
-    relatorioId: number | null;
-    observacao: string;
-  }>({ open: false, relatorioId: null, observacao: "" });
   const [isLoading, setIsLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -199,36 +191,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
       toast.error("Erro ao enviar relatório. Tente novamente.");
     } finally {
       setEnviando(null);
-    }
-  };
-
-  const handleAprovar = async (relatorioId: number) => {
-    setRevisando(relatorioId);
-    try {
-      await revisarRelatorio(relatorioId, "aprovado");
-      toast.success("Relatório aprovado com sucesso.");
-      await loadRelatoriosFiscalizacao();
-    } catch {
-      toast.error("Erro ao aprovar relatório. Tente novamente.");
-    } finally {
-      setRevisando(null);
-    }
-  };
-
-  const handleNaoConformeConfirmar = async () => {
-    const { relatorioId, observacao } = naoConformeDialog;
-    if (!relatorioId) return;
-    setRevisando(relatorioId);
-    setNaoConformeDialog((prev) => ({ ...prev, open: false }));
-    try {
-      await revisarRelatorio(relatorioId, "nao_conforme", observacao);
-      toast.success("Irregularidade registrada. Fiscal notificado.");
-      await loadRelatoriosFiscalizacao();
-    } catch {
-      toast.error("Erro ao registrar irregularidade. Tente novamente.");
-    } finally {
-      setRevisando(null);
-      setNaoConformeDialog({ open: false, relatorioId: null, observacao: "" });
     }
   };
 
@@ -604,7 +566,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                   <TableRow>
                     <TableHead>Período</TableHead>
                     <TableHead>Data do Relatório</TableHead>
-                    <TableHead>Status</TableHead>
                     <TableHead>Salvo em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
@@ -626,33 +587,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                             <IconCalendar className="w-3 h-3" />
                             {fmtDate(rel.data_relatorio)}
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          {rel.status === "rascunho" && (
-                            <Badge variant="outline" className="border-amber-400 text-amber-700 bg-amber-50">
-                              Rascunho
-                            </Badge>
-                          )}
-                          {rel.status === "enviado" && (
-                            <Badge variant="outline" className="border-blue-400 text-blue-700 bg-blue-50">
-                              Pendente
-                            </Badge>
-                          )}
-                          {rel.status === "aprovado" && (
-                            <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">
-                              Aprovado
-                            </Badge>
-                          )}
-                          {rel.status === "nao_conforme" && (
-                            <Badge variant="outline" className="border-red-400 text-red-700 bg-red-50">
-                              Não Conforme
-                            </Badge>
-                          )}
-                          {rel.status === "finalizado" && (
-                            <Badge variant="outline" className="border-green-500 text-green-700 bg-green-50">
-                              Aprovado
-                            </Badge>
-                          )}
                         </TableCell>
                         <TableCell className="text-sm text-gray-500">
                           {rel.created_at
@@ -699,33 +633,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                               </span>
                             )}
 
-                            {/* === AÇÕES DO GESTOR === */}
-                            {ehGestor && rel.status === "enviado" && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  className="h-7 px-2.5 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
-                                  disabled={revisando === rel.id}
-                                  onClick={() => handleAprovar(rel.id)}
-                                >
-                                  {revisando === rel.id
-                                    ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                    : <><span>✅</span> Aprovar</>}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 px-2 text-xs gap-1 border-red-300 text-red-600 hover:bg-red-50"
-                                  disabled={revisando === rel.id}
-                                  title="Registrar não conformidade"
-                                  onClick={() => setNaoConformeDialog({ open: true, relatorioId: rel.id, observacao: "" })}
-                                >
-                                  <IconX className="w-3.5 h-3.5" />
-                                  N. Conforme
-                                </Button>
-                              </>
-                            )}
-
                             <a
                               href={getUrlPdfVisualizarRelatorio(rel.id)}
                               target="_blank"
@@ -760,40 +667,6 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
           )}
         </CardContent>
       </Card>
-
-      {/* Dialog de Não Conforme — gestor registra irregularidade */}
-      <AlertDialog
-        open={naoConformeDialog.open}
-        onOpenChange={(open) => !open && setNaoConformeDialog({ open: false, relatorioId: null, observacao: "" })}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <IconAlertTriangle className="w-5 h-5 text-red-600" />
-              Registrar Não Conformidade
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              O relatório será retornado ao fiscal. Informe a irregularidade identificada.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <textarea
-            className="w-full mt-2 p-2 border border-gray-300 rounded text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
-            rows={4}
-            placeholder="Descreva a irregularidade ou o que precisa ser corrigido..."
-            value={naoConformeDialog.observacao}
-            onChange={(e) => setNaoConformeDialog((prev) => ({ ...prev, observacao: e.target.value }))}
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700"
-              onClick={handleNaoConformeConfirmar}
-            >
-              Confirmar Não Conformidade
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Dialog de Confirmação de Exclusão */}
       <AlertDialog open={deleteDialog.open} onOpenChange={(open) => !open && setDeleteDialog({ open: false, arquivo: null })}>

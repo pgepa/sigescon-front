@@ -122,6 +122,7 @@ function QuestaoSimNao({
   respostas,
   onChange,
   labelNao = "Se não, detalhe as inconformidades",
+  respostaHabilitaDetalhe = "nao",
 }: any) {
   const valor = respostas[campo] as string;
 
@@ -145,7 +146,7 @@ function QuestaoSimNao({
             onChange={(e) => onChange(campoDetalhe, e.target.value)}
             placeholder="Descreva aqui..."
             className="min-h-[56px] text-sm"
-            disabled={valor !== "nao"}
+            disabled={valor !== respostaHabilitaDetalhe}
           />
         </div>
       </div>
@@ -431,7 +432,7 @@ export function FormularioFiscalizacaoModal({
               <QuestaoSimNao numero={2} texto="O prazo de execução/entrega está sendo cumprido?" campo="q2" campoDetalhe="q2_detalhe" respostas={respostas} onChange={handleChange} />
               <QuestaoSimNao numero={3} texto="O nível de qualidade dos serviços/produtos atende aos padrões exigidos?" campo="q3" campoDetalhe="q3_detalhe" respostas={respostas} onChange={handleChange} />
               <QuestaoSimNao numero={4} texto="As medições de serviços ou entregas de produtos correspondem ao que foi realizado/entregue?" campo="q4" campoDetalhe="q4_detalhe" respostas={respostas} onChange={handleChange} />
-              <QuestaoSimNao numero={5} texto="Houve ocorrências ou necessidade de correções na execução?" campo="q5" campoDetalhe="q5_detalhe" respostas={respostas} onChange={handleChange} />
+              <QuestaoSimNao numero={5} texto="Houve ocorrências ou necessidade de correções na execução?" campo="q5" campoDetalhe="q5_detalhe" respostas={respostas} onChange={handleChange} labelNao="Se sim, detalhe as ocorrências e/ou correções necessárias" respostaHabilitaDetalhe="sim" />
             </div>
           </div>
 
@@ -442,7 +443,7 @@ export function FormularioFiscalizacaoModal({
             </div>
             <div className="p-3 space-y-3">
               <QuestaoSimNao numero={6} texto="A empresa contratada apresentou e manteve atualizadas todas as certidões e documentos de habilitação (fiscal, trabalhista, previdenciária, FGTS)?" nota="(Conforme Art. 136 da Lei nº 14.133/21)" campo="q6" campoDetalhe="q6_detalhe" respostas={respostas} onChange={handleChange} />
-              <QuestaoSimNao numero={7} texto="Há indícios de subcontratação sem a prévia autorização da Administração Pública?" nota="(Conforme Art. 122 da Lei nº 14.133/21)" campo="q7" campoDetalhe="q7_detalhe" respostas={respostas} onChange={handleChange} />
+              <QuestaoSimNao numero={7} texto="Há indícios de subcontratação sem a prévia autorização da Administração Pública?" nota="(Conforme Art. 122 da Lei nº 14.133/21)" campo="q7" campoDetalhe="q7_detalhe" respostas={respostas} onChange={handleChange} labelNao="Se sim, detalhe os indícios identificados" respostaHabilitaDetalhe="sim" />
               <QuestaoSimNaoNA numero={8} texto="A empresa cumpriu com as obrigações trabalhistas, sociais e previdenciárias de seus empregados?" nota="(Conforme Art. 117 da Lei nº 14.133/21)" aviso="* PREENCHER SOMENTE QUANDO FOR CONTRATO DE MÃO-DE-OBRA TERCEIRIZADA" campo="q8" campoDetalhe="q8_detalhe" respostas={respostas} onChange={handleChange} labelNao="Se não, especifique a irregularidade" />
               <QuestaoSimNaoNA numero={9} texto="As garantias contratuais (se houver) foram mantidas válidas e atualizadas?" nota="(Conforme Art. 96 da Lei nº 14.133/21)" campo="q9" campoDetalhe="q9_detalhe" respostas={respostas} onChange={handleChange} />
             </div>
