@@ -13,6 +13,7 @@ import {
   IconAlertTriangle,
   IconClipboardList,
   IconX,
+  IconEye,
 } from "@tabler/icons-react";
 import { FileText } from "lucide-react";
 
@@ -47,6 +48,7 @@ import {
   getRelatoriosParaGestor,
   getDadosRelatorioFiscalizacao,
   getUrlPdfRelatorioSalvo,
+  getUrlPdfVisualizarRelatorio,
   enviarRelatorioParaGestor,
   revisarRelatorio,
   type ModeloRelatorioInfo,
@@ -723,6 +725,18 @@ export function ContratoArquivos({ contratoId, contrato, className }: ContratoAr
                                 </Button>
                               </>
                             )}
+
+                            <a
+                              href={getUrlPdfVisualizarRelatorio(rel.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Visualizar relatório em PDF"
+                            >
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
+                                <IconEye className="w-3.5 h-3.5" />
+                                Visualizar
+                              </Button>
+                            </a>
 
                             <a
                               href={getUrlPdfRelatorioSalvo(rel.id)}

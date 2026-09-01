@@ -2468,6 +2468,15 @@ export function getUrlPdfRelatorioSalvo(relatorioId: number): string {
 }
 
 /**
+ * URL do PDF do relatório para visualização inline (abre no visualizador do
+ * navegador em vez de forçar download) — GET /relatorios/visualizar/{id}
+ */
+export function getUrlPdfVisualizarRelatorio(relatorioId: number): string {
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    return `${BASE_URL}/relatorios/visualizar/${relatorioId}`;
+}
+
+/**
  * Faz upload do modelo de relatório
  * POST /api/v1/config/modelo-relatorio/upload
  */
