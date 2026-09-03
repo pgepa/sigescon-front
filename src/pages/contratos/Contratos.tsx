@@ -1094,7 +1094,7 @@ const columns: ColumnDef<ContratoList>[] = [
     { accessorKey: "garantia_prazo_dias" },
 ];
 
-const TIPOS_ADITIVO_OPTIONS: Array<{ value: TermoAditivoCreate["tipo"]; label: string }> = [
+const TIPOS_ADITIVO_OPTIONS: Array<{ value: string; label: string }> = [
     { value: "Prazo", label: "Prazo" },
     { value: "Valor", label: "Valor" },
     { value: "Misto", label: "Misto (Valor + Prazo)" },

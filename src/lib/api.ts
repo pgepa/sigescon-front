@@ -2727,14 +2727,25 @@ export async function getAuditLogsByUsuario(
 }
 
 // ============================================================================
+// ============================================================================
 // TERMOS ADITIVOS
 // ============================================================================
+
+export type TipoTermoAditivo = {
+    id: number;
+    nome: string;
+    descricao?: string | null;
+    ativo: boolean;
+};
 
 export type TermoAditivo = {
     id: number;
     contrato_id: number;
     numero_aditivo: number;
-    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
+    tipo_id?: number;
+    tipo_nome?: string;
+    tipo_descricao?: string | null;
+    tipo?: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros" | string;
     objeto: string;
     data_assinatura: string;
     data_publicacao: string | null;
@@ -2748,10 +2759,13 @@ export type TermoAditivo = {
     arquivo_nome: string | null;
     ativo: boolean;
     status?: "Ativo" | "Vencido" | "Inativo" | null;
+    created_at?: string;
+    updated_at?: string;
 };
 
 export type TermoAditivoCreate = {
-    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
+    tipo_id?: number;
+    tipo?: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros" | string;
     objeto: string;
     data_assinatura: string;
     data_publicacao?: string | null;
@@ -2761,6 +2775,7 @@ export type TermoAditivoCreate = {
     valor_supressao?: number | null;
     pae?: string | null;
     observacoes?: string | null;
+    numero_aditivo?: number | null;
 };
 
 export type TermoAditivoUpdate = Partial<TermoAditivoCreate>;
@@ -2772,11 +2787,36 @@ export type TermoAditivoList = {
 };
 
 /**
+ * Busca todos os tipos de termo aditivo (Prazo, Valor, Misto, Outros)
+ * GET /api/v1/tipos-termo-aditivo
+ */
+export async function getTiposTermoAditivo(): Promise<TipoTermoAditivo[]> {
+    return await api<TipoTermoAditivo[]>('/tipos-termo-aditivo');
+}
+
+/** Helper para garantir tipo_id a partir do nome do tipo */
+function resolveTipoId(dados: Partial<TermoAditivoCreate>): number {
+    if (dados.tipo_id) return Number(dados.tipo_id);
+    const t = String(dados.tipo || '').toLowerCase();
+    if (t.includes('prazo') && !t.includes('misto') && !t.includes('valor')) return 1;
+    if (t.includes('valor') && !t.includes('misto') && !t.includes('prazo')) return 2;
+    if (t.includes('misto')) return 3;
+    return 4;
+}
+
+/**
  * Lista todos os termos aditivos de um contrato
  * GET /api/v1/contratos/{id}/aditivos/
  */
 export async function getTermosAditivos(contratoId: number): Promise<TermoAditivoList> {
-    return await api<TermoAditivoList>(`/contratos/${contratoId}/aditivos/`);
+    const res = await api<TermoAditivoList>(`/contratos/${contratoId}/aditivos/`);
+    if (res?.data) {
+        res.data = res.data.map(item => ({
+            ...item,
+            tipo: (item.tipo_nome || item.tipo) as any
+        }));
+    }
+    return res;
 }
 
 /**
@@ -2787,10 +2827,18 @@ export async function createTermoAditivo(
     contratoId: number,
     dados: TermoAditivoCreate
 ): Promise<TermoAditivo> {
-    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/`, {
+    const payload = {
+        ...dados,
+        tipo_id: resolveTipoId(dados)
+    };
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/`, {
         method: "POST",
-        body: JSON.stringify(dados),
+        body: JSON.stringify(payload),
     });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
 }
 
 /**
@@ -2802,10 +2850,18 @@ export async function updateTermoAditivo(
     aditivoId: number,
     dados: TermoAditivoUpdate
 ): Promise<TermoAditivo> {
-    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+    const payload = { ...dados };
+    if (dados.tipo && !dados.tipo_id) {
+        payload.tipo_id = resolveTipoId(dados);
+    }
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
         method: "PATCH",
-        body: JSON.stringify(dados),
+        body: JSON.stringify(payload),
     });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
 }
 
 /**
@@ -2819,10 +2875,14 @@ export async function uploadArquivoAditivo(
 ): Promise<TermoAditivo> {
     const fd = new FormData();
     fd.append('arquivo', file);
-    return await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}/arquivo`, {
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}/arquivo`, {
         method: 'POST',
         body: fd,
     });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
 }
 
 /**
