@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createHashRouter } from 'react-router-dom';
 import AppLayout from '@/_layouts/app';
 import { AuthLayout } from '@/_layouts/auth';
 
@@ -21,16 +21,28 @@ import { FiscalContratos } from '@/pages/fiscal/FiscalContratos';
 import { GestorDashboard } from '@/pages/gestor/GestorDashboard';
 import EnviarRelatorio from '@/pages/fiscal/EnviarRelatorio';
 import Relatorios from '@/pages/relatorios/Relatorios';
+import RelatorioContratos from '@/pages/relatorios/RelatorioContratos';
 import { AnalisarRelatoriosNovo } from '@/pages/admin/AnalisarRelatoriosNovo';
 import Fiscalizacao from '@/pages/fiscalizacao/Fiscalizacao';
 import GestaoPendenciasVencidas from '@/pages/pendencias/GestaoPendenciasVencidas';
 import Administracao from '@/pages/admin/Administracao';
 import LogsAuditoria from '@/pages/admin/LogsAuditoria';
+import GestaoResponsaveis from '@/pages/responsaveis/GestaoResponsaveis';
+import GestaoTermosAditivos from '@/pages/aditivos/GestaoTermosAditivos';
 
 // Componente para dashboard dinâmico baseado no perfil
 import DashboardRouter from '@/components/DashboardRouter';
 
-export const router = createBrowserRouter([
+// Hash routing: atualizar (F5) continua válido mesmo sem FallbackResource / `.htaccess` no Apache,
+// porque o pedido HTTP é sempre `GET /` e a rota fica em `#/dashboard`.
+export const router = createHashRouter([
+  // Rota pública sem layout (acesso direto sem login)
+  {
+    path: '/relatorio-contratos',
+    element: <RelatorioContratos />,
+    errorElement: <NotFound />,
+  },
+
   // Rotas públicas
   {
     element: <AuthLayout />,
@@ -149,10 +161,17 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute requiredProfiles={['Administrador']}><AnalisarRelatoriosNovo /></ProtectedRoute>,
       },
       {
+        path: '/gestao-responsaveis',
+        element: <ProtectedRoute requiredProfiles={['Administrador']}><GestaoResponsaveis /></ProtectedRoute>,
+      },
+      {
+        path: '/gestao-termos-aditivos',
+        element: <ProtectedRoute requiredProfiles={['Administrador']}><GestaoTermosAditivos /></ProtectedRoute>,
+      },
+      {
         path: '/configuracoes',
         element: <ProtectedRoute requiredProfiles={['Administrador']}><div>Página de Configurações</div></ProtectedRoute>,
       },
-      // Rota catch-all para debug
       {
         path: '*',
         element: <NotFound />,

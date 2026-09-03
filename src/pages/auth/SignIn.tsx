@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { forgotPassword } from "@/lib/api";
@@ -37,7 +37,9 @@ type ForgotPasswordForm = z.infer<typeof forgotPasswordSchema>;
 
 export function SignIn() {
   const navigate = useNavigate();
-  const { user, login, loading: authLoading, perfisDisponiveis } = useAuth(); // 'login' aqui é do seu AuthContext
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/dashboard";
+  const { user, login, loading: authLoading, perfisDisponiveis } = useAuth();
   const [error, setError] = useState("");
   const [showProfileSelection, setShowProfileSelection] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
@@ -67,21 +69,18 @@ export function SignIn() {
   // Redireciona se o usuário já estiver logado e não precisa selecionar perfil
   useEffect(() => {
     if (!authLoading && user && user.id && !showProfileSelection) {
-      console.log("Usuário autenticado detectado, redirecionando para /dashboard");
-      navigate("/dashboard", { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [user, authLoading, navigate, showProfileSelection]);
+  }, [user, authLoading, navigate, showProfileSelection, redirectTo]);
 
   // Verifica se precisa mostrar seleção de perfil após login bem-sucedido
   useEffect(() => {
     if (loginSuccess && user && perfisDisponiveis.length > 1) {
-      console.log("Múltiplos perfis detectados, exibindo seleção de perfil");
       setShowProfileSelection(true);
     } else if (loginSuccess && user) {
-      console.log("Login bem-sucedido, redirecionando para dashboard");
-      navigate("/dashboard", { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [loginSuccess, user, perfisDisponiveis, navigate]);
+  }, [loginSuccess, user, perfisDisponiveis, navigate, redirectTo]);
 
   // Função para lidar com o submit do formulário, agora sem o perfil
   const onSubmit = async ({ email, password }: SignInForm) => {
@@ -102,8 +101,7 @@ export function SignIn() {
   // Função chamada quando um perfil é selecionado
   const handleProfileSelected = () => {
     setShowProfileSelection(false);
-    console.log("Perfil selecionado, redirecionando para dashboard");
-    navigate("/dashboard", { replace: true });
+    navigate(redirectTo, { replace: true });
   };
 
   // Função para abrir modal de esqueceu a senha

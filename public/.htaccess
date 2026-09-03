@@ -1,0 +1,12 @@
+# Fallback para SPA (React Router): servir index.html quando não há arquivo físico.
+# Exige AllowOverride FileInfo (ou All) no <Directory> do Apache — ou use FallbackResource na VirtualHost.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Não reescrever assets existentes
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>

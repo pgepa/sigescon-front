@@ -8,6 +8,9 @@ import {
   IconClipboardList,
   IconAlertTriangle,
   IconSettings,
+  IconReportAnalytics,
+  IconUserCheck,
+  IconFilePlus,
 } from "@tabler/icons-react"
 import { NavMain } from "@/components/nav-main"
 import { NavUser } from "@/components/nav-user"
@@ -69,6 +72,21 @@ const getNavigationByProfile = (perfilNome: string) => {
           icon: IconAlertTriangle,
         },
         {
+          title: "Gestão de Responsáveis",
+          url: "/gestao-responsaveis",
+          icon: IconUserCheck,
+        },
+        {
+          title: "Gestão de Termos Aditivos",
+          url: "/gestao-termos-aditivos",
+          icon: IconFilePlus,
+        },
+        {
+          title: "Relatório Contratos",
+          url: "/relatorio-contratos",
+          icon: IconReportAnalytics,
+        },
+        {
           title: "Administração",
           url: "/administracao",
           icon: IconSettings,
@@ -82,6 +100,11 @@ const getNavigationByProfile = (perfilNome: string) => {
           title: "Contratos",
           url: "/contratos",
           icon: IconFileText,
+        },
+        {
+          title: "Relatório Contratos",
+          url: "/relatorio-contratos",
+          icon: IconReportAnalytics,
         },
       ];
 

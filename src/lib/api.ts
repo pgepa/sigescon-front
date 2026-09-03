@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jwtDecode } from "jwt-decode";
+import { redirectToLogin } from "@/utils/spaNavigation";
 
 // --- CONFIGURAÇÃO DA API ---
 const API_URL = import.meta.env.VITE_API_URL;
@@ -19,7 +20,8 @@ const tokenManager = {
     }),
     saveToken: (token: string, type: string = 'Bearer', refreshToken?: string): void => {
         localStorage.setItem('authToken', token);
-        localStorage.setItem('authTokenType', type);
+        // Cabeçalho HTTP Authorization usa "Bearer" (RFC 6757); a API pode retornar token_type em minúsculas.
+        localStorage.setItem('authTokenType', (type || 'Bearer').toLowerCase() === 'bearer' ? 'Bearer' : (type || 'Bearer'));
         if (refreshToken) {
             localStorage.setItem('refreshToken', refreshToken);
         }
@@ -254,7 +256,7 @@ async function refreshTokenIfNeeded(): Promise<void> {
                 console.error('❌ Erro ao renovar token automaticamente:', error);
                 console.log('🚪 Fazendo logout devido à falha na renovação');
                 tokenManager.removeToken();
-                window.location.href = '/login';
+                redirectToLogin();
             }
         }
     }
@@ -311,7 +313,25 @@ async function api<T>(endpoint: string, options?: RequestInit, useAuthUrl: boole
     }
 }
 
+// Chamada pública — sem token de autenticação
+async function publicApi<T>(endpoint: string): Promise<T> {
+    const fullUrl = `${API_URL}${endpoint}`;
+    const response = await fetch(fullUrl, {
+        headers: { Accept: "application/json" },
+    });
+    return handleResponse<T>(response);
+}
+
+async function publicApiBlob(endpoint: string): Promise<Blob> {
+    const fullUrl = `${API_URL}${endpoint}`;
+    const response = await fetch(fullUrl);
+    if (!response.ok) throw new Error(`Erro ${response.status}`);
+    return response.blob();
+}
+
 async function apiBlob(endpoint: string, options?: RequestInit, useAuthUrl: boolean = false): Promise<Blob> {
+    await refreshTokenIfNeeded();
+
     const baseUrl = useAuthUrl ? AUTH_API_URL : API_URL;
     const { token, type } = tokenManager.getTokenData();
     const headers = new Headers(options?.headers);
@@ -320,10 +340,14 @@ async function apiBlob(endpoint: string, options?: RequestInit, useAuthUrl: bool
         headers.set('Authorization', `${type} ${token}`);
     }
 
-    const response = await fetch(`${baseUrl}${endpoint}`, { ...options, headers });
+    const fullUrl = `${baseUrl}${endpoint}`;
+    console.log('📥 Download:', fullUrl);
+
+    const response = await fetch(fullUrl, { ...options, headers });
 
     if (!response.ok) {
-        throw new Error(`Erro no download: ${response.statusText}`);
+        console.error('❌ Erro no download:', response.status, response.statusText, fullUrl);
+        throw new Error(`Erro no download: ${response.status} ${response.statusText}`);
     }
     return response.blob();
 }
@@ -369,8 +393,19 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
         }
         
         return data;
-    } catch (error) {
+    } catch (error: unknown) {
         console.error('❌ Erro no login:', error);
+        const isNetwork =
+            error instanceof TypeError ||
+            (error instanceof Error && error.message === "Failed to fetch");
+        if (isNetwork) {
+            throw new Error(
+                "Não foi possível contatar o servidor de autenticação. Em ambiente só HTTP (front e API em http://), " +
+                    "verifique se o IP/host em VITE_AUTH_API_URL é alcançável pelo navegador do usuário (firewall/rota), " +
+                    "se o FastAPI está no ar e se o CORS da API inclui Private Network Access quando aplicável (Chrome → IP privado). " +
+                    "Quando no futuro o site for HTTPS, a API também precisará ser HTTPS ou o mesmo host — senão há bloqueio de conteúdo misto.",
+            );
+        }
         throw error;
     }
 }
@@ -635,7 +670,7 @@ export const relatorioSchema = z.object({ id: z.number(), descricao: z.string(),
 export type Relatorio = z.infer<typeof relatorioSchema>;
 export const pendenciaSchema = z.object({ id: z.number(), contrato_id: z.number(), descricao: z.string(), data_prazo: z.string(), status_pendencia_id: z.number(), criado_por_usuario_id: z.number(), status_nome: z.string().optional(), criado_por_nome: z.string().optional() });
 
-export type Contrato = { id: number; nr_contrato: string; objeto: string; valor_anual: number | null; valor_global: number | null; data_inicio: string; data_fim: string; contratado_id: number; modalidade_id: number; status_id: number; gestor_id: number; fiscal_id: number; fiscal_substituto_id: number | null; pae: string | null; doe: string | null; data_doe: string | null; garantia: string | null; modalidade_nome?: string; contratado_nome?: string; status_nome?: string; gestor_nome?: string; fiscal_nome?: string; fiscal_substituto_nome?: string; };
+export type Contrato = { id: number; nr_contrato: string; objeto: string; valor_anual: number | null; valor_global: number | null; data_inicio: string; data_fim: string; data_fim_original?: string | null; contratado_id: number; modalidade_id: number; status_id: number; gestor_id: number; fiscal_id: number; fiscal_substituto_id: number | null; pae: string | null; doe: string | null; data_doe: string | null; garantia: string | null; base_legal?: string | null; termos_contratuais?: string | null; modalidade_nome?: string; contratado_nome?: string; status_nome?: string; gestor_nome?: string; fiscal_nome?: string; fiscal_substituto_nome?: string; };
 export type ContratoDetalhado = Contrato & { arquivos?: Arquivo[]; relatorios?: Relatorio[]; pendencias?: Pendencia[]; contratado?: { nome: string; cnpj: string; cpf: string; }; };
 export type ContratosApiResponse = { data: Contrato[]; total_items: number; total_pages: number; current_page: number; per_page: number; };
 
@@ -780,6 +815,11 @@ export async function getRelatorioDetalhes(contratoId: number, relatorioId: numb
 
 export function downloadArquivoContrato(contratoId: number, arquivoId: number): Promise<Blob> {
     return apiBlob(`/contratos/${contratoId}/arquivos/${arquivoId}/download`);
+}
+
+// Download de arquivo de termo aditivo — usa endpoint direto pelo arquivo_id
+export function downloadArquivoAditivo(arquivoId: number): Promise<Blob> {
+    return apiBlob(`/arquivos/${arquivoId}/download`);
 }
 
 export type StatusPendencia = {
@@ -1094,6 +1134,7 @@ export type ArquivosResponse = {
         tipo_arquivo: string;
         tamanho_bytes: number;
         contrato_id: number;
+        tipo_vinculo: 'contrato' | 'termo_aditivo' | 'relatorio' | string;
         created_at: string;
     }[];
     total_arquivos: number;
@@ -1123,6 +1164,16 @@ export async function getArquivosByContratoId(contratoId: number): Promise<Arqui
 export function deleteArquivoContrato(contratoId: number, arquivoId: number): Promise<void> {
     return api<void>(`/contratos/${contratoId}/arquivos/${arquivoId}`, {
         method: 'DELETE',
+    });
+}
+
+export function uploadArquivoContrato(contratoId: number, file: File, descricao?: string): Promise<{ id: number; nome_arquivo: string }> {
+    const fd = new FormData();
+    fd.append('documento_contrato', file);
+    if (descricao) fd.append('descricao', descricao);
+    return api<{ id: number; nome_arquivo: string }>(`/contratos/${contratoId}/arquivos/`, {
+        method: 'POST',
+        body: fd,
     });
 }
 
@@ -2346,6 +2397,98 @@ export async function getModeloRelatorioInfo(): Promise<ModeloRelatorioInfo | nu
     return await api<ModeloRelatorioInfo | null>('/config/modelo-relatorio/info');
 }
 
+export type RelatorioFiscalizacaoItem = {
+    id: number;
+    periodo_inicio: string | null;
+    periodo_fim: string | null;
+    data_relatorio: string | null;
+    // rascunho | enviado | aprovado | nao_conforme
+    status: string;
+    gestor_observacao: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+};
+
+export type RelatorioFiscalizacaoFormData = RelatorioFiscalizacaoItem & {
+    execucao_objeto_sim: boolean | null;
+    execucao_objeto_detalhes: string | null;
+    prazo_execucao_sim: boolean | null;
+    prazo_execucao_detalhes: string | null;
+    nivel_qualidade_sim: boolean | null;
+    nivel_qualidade_detalhes: string | null;
+    medicoes_servicos_sim: boolean | null;
+    medicoes_servicos_detalhes: string | null;
+    ocorrencias_sim: boolean | null;
+    ocorrencias_detalhes: string | null;
+    documentos_habilitacao_sim: boolean | null;
+    documentos_habilitacao_detalhes: string | null;
+    subcontratacao_sim: boolean | null;
+    subcontratacao_detalhes: string | null;
+    obrigacoes_empregados_resposta: string | null;
+    obrigacoes_empregados_detalhes: string | null;
+    garantias_contratuais_resposta: string | null;
+    garantias_contratuais_detalhes: string | null;
+    execucao_satisfatoria_sim: boolean | null;
+    execucao_satisfatoria_detalhes: string | null;
+};
+
+export async function getDadosRelatorioFiscalizacao(relatorioId: number): Promise<RelatorioFiscalizacaoFormData> {
+    return api<RelatorioFiscalizacaoFormData>(`/relatorios/${relatorioId}/dados`);
+}
+
+export async function getRelatoriosFiscalizacao(contratoId: number): Promise<RelatorioFiscalizacaoItem[]> {
+    try {
+        const result = await api<RelatorioFiscalizacaoItem[]>(`/relatorios/listar/contrato/${contratoId}`);
+        console.log(`✅ Relatórios fiscalização contrato ${contratoId}:`, result);
+        return result;
+    } catch (error) {
+        console.error(`❌ Erro ao carregar relatórios fiscalização (contrato ${contratoId}):`, error);
+        return [];
+    }
+}
+
+export async function enviarRelatorioParaGestor(relatorioId: number): Promise<{ id: number; status: string; mensagem: string }> {
+    return api<{ id: number; status: string; mensagem: string }>(`/relatorios/enviar/${relatorioId}`, {
+        method: 'POST',
+    });
+}
+
+export async function getRelatoriosParaGestor(contratoId: number): Promise<RelatorioFiscalizacaoItem[]> {
+    try {
+        const result = await api<RelatorioFiscalizacaoItem[]>(`/relatorios/gestor/contrato/${contratoId}`);
+        return result;
+    } catch (error) {
+        console.error(`❌ Erro ao carregar relatórios para gestor (contrato ${contratoId}):`, error);
+        return [];
+    }
+}
+
+export async function revisarRelatorio(
+    relatorioId: number,
+    status: 'aprovado' | 'nao_conforme',
+    gestor_observacao?: string,
+): Promise<{ id: number; status: string; mensagem: string }> {
+    return api<{ id: number; status: string; mensagem: string }>(`/relatorios/${relatorioId}/revisar`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, gestor_observacao: gestor_observacao ?? null }),
+    });
+}
+
+export function getUrlPdfRelatorioSalvo(relatorioId: number): string {
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    return `${BASE_URL}/relatorios/gerar-pdf-salvo/${relatorioId}`;
+}
+
+/**
+ * URL do PDF do relatório para visualização inline (abre no visualizador do
+ * navegador em vez de forçar download) — GET /relatorios/visualizar/{id}
+ */
+export function getUrlPdfVisualizarRelatorio(relatorioId: number): string {
+    const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+    return `${BASE_URL}/relatorios/visualizar/${relatorioId}`;
+}
+
 /**
  * Faz upload do modelo de relatório
  * POST /api/v1/config/modelo-relatorio/upload
@@ -2594,4 +2737,364 @@ export async function getAuditLogsByUsuario(
 ): Promise<AuditLog[]> {
     console.log(`🔍 Buscando logs do usuário #${usuarioId}...`);
     return await api<AuditLog[]>(`/audit-logs/usuario/${usuarioId}?limit=${limit}`);
+}
+
+// ============================================================================
+// ============================================================================
+// TERMOS ADITIVOS
+// ============================================================================
+
+export type TipoTermoAditivo = {
+    id: number;
+    nome: string;
+    descricao?: string | null;
+    ativo: boolean;
+};
+
+export type TermoAditivo = {
+    id: number;
+    contrato_id: number;
+    numero_aditivo: number;
+    tipo_id?: number;
+    tipo_nome?: string;
+    tipo_descricao?: string | null;
+    tipo?: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros" | string;
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao: string | null;
+    data_inicio: string | null;
+    nova_data_fim: string | null;
+    valor_acrescimo: number | null;
+    valor_supressao: number | null;
+    pae: string | null;
+    observacoes: string | null;
+    arquivo_id: number | null;
+    arquivo_nome: string | null;
+    ativo: boolean;
+    status?: "Ativo" | "Vencido" | "Inativo" | null;
+    created_at?: string;
+    updated_at?: string;
+};
+
+export type TermoAditivoCreate = {
+    tipo_id?: number;
+    tipo?: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros" | string;
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao?: string | null;
+    data_inicio?: string | null;
+    nova_data_fim?: string | null;
+    valor_acrescimo?: number | null;
+    valor_supressao?: number | null;
+    pae?: string | null;
+    observacoes?: string | null;
+    numero_aditivo?: number | null;
+};
+
+export type TermoAditivoUpdate = Partial<TermoAditivoCreate>;
+
+export type TermoAditivoList = {
+    data: TermoAditivo[];
+    total: number;
+    contrato_id: number;
+};
+
+/**
+ * Busca todos os tipos de termo aditivo (Prazo, Valor, Misto, Outros)
+ * GET /api/v1/tipos-termo-aditivo
+ */
+export async function getTiposTermoAditivo(): Promise<TipoTermoAditivo[]> {
+    return await api<TipoTermoAditivo[]>('/tipos-termo-aditivo');
+}
+
+/** Helper para garantir tipo_id a partir do nome do tipo */
+function resolveTipoId(dados: Partial<TermoAditivoCreate>): number {
+    if (dados.tipo_id) return Number(dados.tipo_id);
+    const t = String(dados.tipo || '').toLowerCase();
+    if (t.includes('prazo') && !t.includes('misto') && !t.includes('valor')) return 1;
+    if (t.includes('valor') && !t.includes('misto') && !t.includes('prazo')) return 2;
+    if (t.includes('misto')) return 3;
+    return 4;
+}
+
+/**
+ * Lista todos os termos aditivos de um contrato
+ * GET /api/v1/contratos/{id}/aditivos/
+ */
+export async function getTermosAditivos(contratoId: number): Promise<TermoAditivoList> {
+    const res = await api<TermoAditivoList>(`/contratos/${contratoId}/aditivos/`);
+    if (res?.data) {
+        res.data = res.data.map(item => ({
+            ...item,
+            tipo: (item.tipo_nome || item.tipo) as any
+        }));
+    }
+    return res;
+}
+
+/**
+ * Cria um novo termo aditivo
+ * POST /api/v1/contratos/{id}/aditivos/
+ */
+export async function createTermoAditivo(
+    contratoId: number,
+    dados: TermoAditivoCreate
+): Promise<TermoAditivo> {
+    const payload = {
+        ...dados,
+        tipo_id: resolveTipoId(dados)
+    };
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+    });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
+}
+
+/**
+ * Atualiza um termo aditivo
+ * PATCH /api/v1/contratos/{id}/aditivos/{aditivo_id}
+ */
+export async function updateTermoAditivo(
+    contratoId: number,
+    aditivoId: number,
+    dados: TermoAditivoUpdate
+): Promise<TermoAditivo> {
+    const payload = { ...dados };
+    if (dados.tipo && !dados.tipo_id) {
+        payload.tipo_id = resolveTipoId(dados);
+    }
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+    });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
+}
+
+/**
+ * Faz upload de arquivo vinculado a um termo aditivo
+ * POST /api/v1/contratos/{id}/aditivos/{aditivo_id}/arquivo
+ */
+export async function uploadArquivoAditivo(
+    contratoId: number,
+    aditivoId: number,
+    file: File,
+): Promise<TermoAditivo> {
+    const fd = new FormData();
+    fd.append('arquivo', file);
+    const res = await api<TermoAditivo>(`/contratos/${contratoId}/aditivos/${aditivoId}/arquivo`, {
+        method: 'POST',
+        body: fd,
+    });
+    return {
+        ...res,
+        tipo: (res.tipo_nome || res.tipo) as any
+    };
+}
+
+/**
+ * Inativa um termo aditivo (soft delete) — continua existindo e visível na lista.
+ * DELETE /api/v1/contratos/{id}/aditivos/{aditivo_id}
+ */
+export async function deleteTermoAditivo(
+    contratoId: number,
+    aditivoId: number
+): Promise<{ message: string }> {
+    return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}`, {
+        method: "DELETE",
+    });
+}
+
+/**
+ * Exclui um termo aditivo definitivamente (hard delete) — remove do banco de vez.
+ * DELETE /api/v1/contratos/{id}/aditivos/{aditivo_id}/permanente
+ */
+export async function deleteTermoAditivoDefinitivamente(
+    contratoId: number,
+    aditivoId: number
+): Promise<{ message: string }> {
+    return await api<{ message: string }>(`/contratos/${contratoId}/aditivos/${aditivoId}/permanente`, {
+        method: "DELETE",
+    });
+}
+
+// ============================================================================
+// GESTÃO DE TERMOS ADITIVOS (relatório consolidado, todos os contratos)
+// ============================================================================
+
+export type TermoAditivoRelatorioItem = {
+    id: number;
+    contrato_id: number;
+    numero_aditivo: number;
+    tipo: "Prazo" | "Valor" | "Objeto" | "Misto" | "Outros";
+    objeto: string;
+    data_assinatura: string;
+    data_publicacao: string | null;
+    data_inicio: string | null;
+    nova_data_fim: string | null;
+    valor_acrescimo: number | null;
+    valor_supressao: number | null;
+    pae: string | null;
+    ativo: boolean;
+    arquivo_id: number | null;
+    arquivo_nome: string | null;
+    nr_contrato: string;
+    contrato_objeto: string;
+    contratado_nome: string | null;
+    status_calc: "Ativo" | "Vencido" | "Inativo";
+};
+
+export type TermoAditivoRelatorioPaginated = {
+    data: TermoAditivoRelatorioItem[];
+    total_items: number;
+    total_pages: number;
+    current_page: number;
+    per_page: number;
+};
+
+/**
+ * Relatório consolidado de termos aditivos de todos os contratos.
+ * GET /api/v1/aditivos/relatorio
+ */
+export function getRelatorioTermosAditivos(
+    filters: Record<string, any>
+): Promise<TermoAditivoRelatorioPaginated> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return api<TermoAditivoRelatorioPaginated>(`/aditivos/relatorio?${params.toString()}`);
+}
+
+// ============================================================================
+// GESTÃO DE RESPONSÁVEIS DO CONTRATO
+// ============================================================================
+
+export type ContratoResponsavel = {
+    id: number;
+    contrato_id: number;
+    usuario_id: number;
+    tipo: string;
+    data_inicio: string;
+    data_fim: string | null;
+    portaria: string | null;
+    usuario_nome: string | null;
+    contrato_nr: string | null;
+    criado_por_nome: string | null;
+    created_at: string | null;
+};
+
+export type RelatorioResponsaveisItem = {
+    contrato_id: number;
+    nr_contrato: string;
+    objeto: string;
+    data_inicio: string | null;
+    data_fim: string | null;
+    status_nome: string | null;
+    gestor_atual_nome: string | null;
+    gestor_atual_id: number | null;
+    fiscal_atual_nome: string | null;
+    fiscal_atual_id: number | null;
+    fiscal_substituto_atual_nome: string | null;
+    fiscal_substituto_atual_id: number | null;
+};
+
+export type RelatorioResponsaveisPaginated = {
+    data: RelatorioResponsaveisItem[];
+    total_items: number;
+    total_pages: number;
+    current_page: number;
+    per_page: number;
+};
+
+export type ArquivoPortaria = {
+    id: number;
+    nome_arquivo: string;
+    tipo_arquivo: string | null;
+    tamanho_bytes: number | null;
+    contrato_id: number;
+    created_at: string | null;
+};
+
+export function getRelatorioResponsaveis(
+    filters: Record<string, any>
+): Promise<RelatorioResponsaveisPaginated> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return api<RelatorioResponsaveisPaginated>(`/contratos/relatorio/responsaveis?${params.toString()}`);
+}
+
+export function getResponsaveisContrato(
+    contratoId: number, tipo?: string, apenasAtuais?: boolean
+): Promise<{ responsaveis: ContratoResponsavel[]; total: number; contrato_id: number }> {
+    const params = new URLSearchParams();
+    if (tipo) params.append('tipo', tipo);
+    if (apenasAtuais) params.append('apenas_atuais', 'true');
+    return api(`/contratos/${contratoId}/responsaveis?${params.toString()}`);
+}
+
+export function getArquivosPortaria(
+    contratoId: number
+): Promise<{ arquivos_portaria: ArquivoPortaria[]; total_arquivos: number; contrato_id: number }> {
+    return api(`/arquivos/portaria/contrato/${contratoId}`);
+}
+
+export function downloadArquivoPortaria(arquivoId: number): Promise<Blob> {
+    return apiBlob(`/arquivos/${arquivoId}/download`);
+}
+
+// ============================================================================
+// FUNÇÕES PÚBLICAS — Relatório de Contratos (sem autenticação)
+// ============================================================================
+
+export function publicGetContratos(filters: Record<string, any>): Promise<ContratosApiResponse> {
+    const params = new URLSearchParams();
+    for (const key in filters) {
+        if (filters[key] !== null && filters[key] !== undefined && filters[key] !== '') {
+            params.append(key, String(filters[key]));
+        }
+    }
+    return publicApi<ContratosApiResponse>(`/public/contratos?${params.toString()}`);
+}
+
+export function publicGetContratoDetalhado(id: number): Promise<ContratoDetalhado> {
+    return publicApi<ContratoDetalhado>(`/public/contratos/${id}`);
+}
+
+export function publicGetArquivosByContratoId(contratoId: number): Promise<ArquivosResponse> {
+    return publicApi<ArquivosResponse>(`/public/contratos/${contratoId}/arquivos`).catch(() => ({
+        arquivos: [], total_arquivos: 0, contrato_id: contratoId,
+    }));
+}
+
+export function publicGetTermosAditivos(contratoId: number): Promise<{ data: TermoAditivo[] }> {
+    return publicApi<{ data: TermoAditivo[] }>(`/public/contratos/${contratoId}/aditivos`).catch(() => ({ data: [] }));
+}
+
+export function publicDownloadArquivo(arquivoId: number): Promise<Blob> {
+    return publicApiBlob(`/public/arquivos/${arquivoId}/download`);
+}
+
+export function publicGetStatus(): Promise<Status[]> {
+    return publicApi<Status[]>(`/public/status`).catch(() => []);
+}
+
+export function publicGetContratados(): Promise<{ data: Contratado[]; total: number }> {
+    return publicApi<{ data: Contratado[]; total: number }>(`/public/contratados`).catch(() => ({ data: [], total: 0 }));
+}
+
+export function publicGetModalidades(): Promise<Modalidade[]> {
+    return publicApi<Modalidade[]>(`/public/modalidades`).catch(() => []);
 }

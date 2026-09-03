@@ -1,3 +1,4 @@
+import { useLocation } from 'react-router-dom';
 import { useAuth } from "@/contexts/AuthContext";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import { FiscalDashboard } from "@/pages/fiscal/FiscalDashboard";
@@ -7,13 +8,14 @@ import { GestorDashboard } from "@/pages/gestor/GestorDashboard";
  * Componente que renderiza o dashboard apropriado baseado no perfil ativo do usuário
  */
 export default function DashboardRouter() {
+  const location = useLocation();
   const { perfilAtivo, user, perfisDisponiveis } = useAuth();
 
   console.log("🔍 DashboardRouter - Estado atual:", {
     perfilAtivo,
     user,
     perfisDisponiveis,
-    url: window.location.pathname
+    url: location.pathname
   });
 
   if (!perfilAtivo) {

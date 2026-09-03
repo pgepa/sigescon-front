@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import {
   IconFile,
@@ -11,7 +11,11 @@ import {
   IconCalendar,
   IconUser,
   IconAlertTriangle,
+  IconClipboardList,
+  IconEye,
 } from "@tabler/icons-react";
+import { FileText } from "lucide-react";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,14 +42,34 @@ import {
   getArquivosByContratoId,
   downloadArquivoContrato,
   deleteArquivoContrato,
-  getRelatoriosAprovadosByContratoId,
   getModeloRelatorioInfo,
-  downloadModeloRelatorio,
-  type ModeloRelatorioInfo
+  getRelatoriosFiscalizacao,
+  getRelatoriosParaGestor,
+  getDadosRelatorioFiscalizacao,
+  getUrlPdfRelatorioSalvo,
+  getUrlPdfVisualizarRelatorio,
+  enviarRelatorioParaGestor,
+  type ModeloRelatorioInfo,
+  type RelatorioFiscalizacaoItem,
+  type RelatorioFiscalizacaoFormData,
 } from "@/lib/api";
+import { FormularioFiscalizacaoModal } from "@/components/FormularioFiscalizacaoModal";
+
+interface ContratoInfo {
+  nr_contrato?: string;
+  pae?: string;
+  contratado_nome?: string;
+  contratado_cnpj?: string;
+  objeto?: string;
+  data_inicio?: string;
+  data_fim?: string;
+  valor_global?: number | null;
+  fiscal_nome?: string;
+}
 
 interface ContratoArquivosProps {
   contratoId: number;
+  contrato?: ContratoInfo;
   className?: string;
 }
 
@@ -59,10 +83,17 @@ type ArquivoContrato = {
   categoria: 'contratual' | 'relatorio';
 };
 
-export function ContratoArquivos({ contratoId, className }: ContratoArquivosProps) {
+export function ContratoArquivos({ contratoId, contrato, className }: ContratoArquivosProps) {
   const { perfilAtivo } = useAuth();
   const [arquivosContratuais, setArquivosContratuais] = useState<ArquivoContrato[]>([]);
-  const [arquivosRelatorios, setArquivosRelatorios] = useState<ArquivoContrato[]>([]);
+  const [relatoriosFiscalizacao, setRelatoriosFiscalizacao] = useState<RelatorioFiscalizacaoItem[]>([]);
+  const [filtroMes, setFiltroMes] = useState<string>("");
+  const [editandoRelatorio, setEditandoRelatorio] = useState<{
+    id: number;
+    dados: RelatorioFiscalizacaoFormData;
+  } | null>(null);
+  const [carregandoEdicao, setCarregandoEdicao] = useState<number | null>(null);
+  const [enviando, setEnviando] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -70,6 +101,7 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
   }>({ open: false, arquivo: null });
   const [isDeleting, setIsDeleting] = useState(false);
   const [modeloRelatorio, setModeloRelatorio] = useState<ModeloRelatorioInfo | null>(null);
+  const [formularioAberto, setFormularioAberto] = useState(false);
 
   // Verificar se o usuário pode excluir arquivos (apenas admin)
   const canDelete = perfilAtivo?.nome === 'Administrador';
@@ -99,31 +131,6 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
     }
   };
 
-  // Carregar relatórios aprovados (apenas com pendências concluídas)
-  const loadRelatoriosAprovados = async () => {
-    try {
-      console.log("🔍 Carregando relatórios aprovados do contrato:", contratoId);
-      const response = await getRelatoriosAprovadosByContratoId(contratoId);
-
-      // Mapear relatórios aprovados para o formato esperado
-      const relatoriosFormatados = response.data.map((relatorio: any) => ({
-        id: relatorio.arquivo_id || relatorio.id, // Usar arquivo_id para download
-        nome: relatorio.nome_arquivo || `Relatório_${relatorio.id}.pdf`,
-        tipo: getFileExtension(relatorio.nome_arquivo || 'pdf'),
-        tamanho: 0, // Tamanho não disponível na resposta atual
-        data_upload: relatorio.created_at,
-        uploadado_por_nome: relatorio.enviado_por || 'Fiscal',
-        categoria: 'relatorio' as const
-      }));
-
-      setArquivosRelatorios(relatoriosFormatados);
-      console.log("✅ Relatórios carregados:", relatoriosFormatados);
-    } catch (error) {
-      console.error("❌ Erro ao carregar relatórios:", error);
-      setArquivosRelatorios([]);
-    }
-  };
-
   // Carregar todos os dados
   const loadModeloRelatorio = async () => {
     try {
@@ -136,14 +143,64 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
     }
   };
 
-  const handleDownloadModelo = async () => {
+  const boolParaOpcao = (v: boolean | null): string => {
+    if (v === true) return "sim";
+    if (v === false) return "nao";
+    return "";
+  };
+
+  const dbParaRespostas = (d: RelatorioFiscalizacaoFormData) => ({
+    periodo_inicio: d.periodo_inicio?.slice(0, 10) || "",
+    periodo_fim: d.periodo_fim?.slice(0, 10) || "",
+    data_assinatura: d.data_relatorio?.slice(0, 10) || "",
+    q1: boolParaOpcao(d.execucao_objeto_sim), q1_detalhe: d.execucao_objeto_detalhes || "",
+    q2: boolParaOpcao(d.prazo_execucao_sim), q2_detalhe: d.prazo_execucao_detalhes || "",
+    q3: boolParaOpcao(d.nivel_qualidade_sim), q3_detalhe: d.nivel_qualidade_detalhes || "",
+    q4: boolParaOpcao(d.medicoes_servicos_sim), q4_detalhe: d.medicoes_servicos_detalhes || "",
+    q5: boolParaOpcao(d.ocorrencias_sim), q5_detalhe: d.ocorrencias_detalhes || "",
+    q6: boolParaOpcao(d.documentos_habilitacao_sim), q6_detalhe: d.documentos_habilitacao_detalhes || "",
+    q7: boolParaOpcao(d.subcontratacao_sim), q7_detalhe: d.subcontratacao_detalhes || "",
+    q8: d.obrigacoes_empregados_resposta || "", q8_detalhe: d.obrigacoes_empregados_detalhes || "",
+    q9: d.garantias_contratuais_resposta || "", q9_detalhe: d.garantias_contratuais_detalhes || "",
+    q10: boolParaOpcao(d.execucao_satisfatoria_sim), q10_detalhe: d.execucao_satisfatoria_detalhes || "",
+  });
+
+  const handleAbrirEdicao = async (relatorioId: number) => {
+    setCarregandoEdicao(relatorioId);
     try {
-      await downloadModeloRelatorio();
-      toast.success("Download iniciado!");
-    } catch (error: any) {
-      console.error("❌ Erro ao baixar modelo:", error);
-      toast.error("Erro ao baixar modelo de relatório");
+      const dados = await getDadosRelatorioFiscalizacao(relatorioId);
+      setEditandoRelatorio({ id: relatorioId, dados });
+      setFormularioAberto(true);
+    } catch {
+      toast.error("Erro ao carregar dados do rascunho.");
+    } finally {
+      setCarregandoEdicao(null);
     }
+  };
+
+  const ehFiscal = perfilAtivo?.nome === "Fiscal";
+  const ehGestor = perfilAtivo?.nome === "Gestor" || perfilAtivo?.nome === "Administrador";
+
+  const handleEnviarParaGestor = async (relatorioId: number) => {
+    setEnviando(relatorioId);
+    try {
+      await enviarRelatorioParaGestor(relatorioId);
+      toast.success("Relatório enviado ao gestor com sucesso.");
+      await loadRelatoriosFiscalizacao();
+    } catch {
+      toast.error("Erro ao enviar relatório. Tente novamente.");
+    } finally {
+      setEnviando(null);
+    }
+  };
+
+  const loadRelatoriosFiscalizacao = async () => {
+    console.log(`[Relatórios] perfil=${perfilAtivo?.nome} ehGestor=${ehGestor} contratoId=${contratoId}`);
+    const data = ehGestor
+      ? await getRelatoriosParaGestor(contratoId)
+      : await getRelatoriosFiscalizacao(contratoId);
+    console.log(`[Relatórios] retornados:`, data.length, data.map(r => r.status));
+    setRelatoriosFiscalizacao(data);
   };
 
   const loadArquivos = async () => {
@@ -151,8 +208,8 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
     try {
       await Promise.all([
         loadArquivosContratuais(),
-        loadRelatoriosAprovados(),
-        loadModeloRelatorio()
+        loadModeloRelatorio(),
+        loadRelatoriosFiscalizacao(),
       ]);
     } finally {
       setIsLoading(false);
@@ -161,8 +218,27 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
 
   useEffect(() => {
     loadArquivos();
-  }, [contratoId]);
+  // perfilAtivo?.nome garante que o endpoint correto é chamado após o perfil ser carregado
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contratoId, perfilAtivo?.nome]);
 
+  // Meses disponíveis para o filtro (derivado dos dados carregados)
+  const mesesDisponiveis = useMemo(() => {
+    const set = new Set<string>();
+    relatoriosFiscalizacao.forEach((r) => {
+      const ref = r.periodo_inicio || r.created_at;
+      if (ref) set.add(ref.slice(0, 7)); // "YYYY-MM"
+    });
+    return Array.from(set).sort().reverse();
+  }, [relatoriosFiscalizacao]);
+
+  const relatoriosFiltrados = useMemo(() => {
+    if (!filtroMes) return relatoriosFiscalizacao;
+    return relatoriosFiscalizacao.filter((r) => {
+      const ref = r.periodo_inicio || r.created_at;
+      return ref?.startsWith(filtroMes);
+    });
+  }, [relatoriosFiscalizacao, filtroMes]);
 
   // Função para obter extensão do arquivo
   const getFileExtension = (nomeArquivo: string): string => {
@@ -242,11 +318,8 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
       console.log("🗑️ Excluindo arquivo:", arquivo.nome);
       await deleteArquivoContrato(contratoId, arquivo.id);
 
-      // Remover arquivo da lista apropriada
       if (arquivo.categoria === 'contratual') {
-        setArquivosContratuais(prev => prev.filter(a => a.id !== arquivo.id));
-      } else {
-        setArquivosRelatorios(prev => prev.filter(a => a.id !== arquivo.id));
+        setArquivosContratuais(prev => prev.filter((a: ArquivoContrato) => a.id !== arquivo.id));
       }
 
       toast.success("Arquivo excluído com sucesso!");
@@ -296,38 +369,51 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Modelo de Relatório (se existir) */}
-      {modeloRelatorio && (
-        <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border-2 border-purple-300 rounded-lg p-4 shadow-md">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-purple-600 text-white p-2 rounded-lg">
-                <IconFile className="w-6 h-6" />
-              </div>
-              <div>
-                <p className="font-semibold text-purple-900 flex items-center gap-2">
-                  📋 Modelo de Relatório Fiscal
-                  <Badge className="bg-purple-600 text-white">Padrão do Sistema</Badge>
-                </p>
-                <p className="text-sm text-purple-700 mt-1">
-                  {modeloRelatorio.nome_original}
-                </p>
-                <p className="text-xs text-purple-600 mt-0.5">
-                  Use este modelo para criar relatórios padronizados
-                </p>
-              </div>
+      {/* Formulário de Fiscalização */}
+      <div className="bg-gradient-to-r from-blue-50 to-slate-50 border-2 border-blue-200 rounded-lg p-4 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-blue-700 text-white p-2 rounded-lg">
+              <IconClipboardList className="w-6 h-6" />
             </div>
-            <Button
-              onClick={handleDownloadModelo}
-              className="bg-purple-600 hover:bg-purple-700 text-white shadow-md"
-              size="sm"
-            >
-              <IconDownload className="w-4 h-4 mr-2" />
-              Baixar Modelo
-            </Button>
+            <div>
+              <p className="font-semibold text-blue-900 flex items-center gap-2">
+                Preencher Relatório Fiscal
+                <Badge className="bg-blue-700 text-white text-xs">Padrão do Sistema</Badge>
+              </p>
+              <p className="text-sm text-blue-700 mt-0.5">
+                {modeloRelatorio?.nome_original || "Formulário de Fiscalização — Lei nº 14.133/2021"}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Preencha diretamente no sistema e salve como rascunho, relatório ou PDF
+              </p>
+            </div>
           </div>
+          <Button
+            onClick={() => setFormularioAberto(true)}
+            className="bg-blue-700 hover:bg-blue-800 text-white shadow-sm shrink-0"
+            size="sm"
+          >
+            <IconClipboardList className="w-4 h-4 mr-2" />
+            Preencher Formulário
+          </Button>
         </div>
-      )}
+      </div>
+
+      <FormularioFiscalizacaoModal
+        open={formularioAberto}
+        onOpenChange={(aberto) => {
+          setFormularioAberto(aberto);
+          if (!aberto) {
+            setEditandoRelatorio(null);
+            loadRelatoriosFiscalizacao(); // Atualiza lista após fechar
+          }
+        }}
+        contrato={contrato}
+        contratoId={contratoId}
+        relatorioId={editandoRelatorio?.id}
+        dadosIniciais={editandoRelatorio ? dbParaRespostas(editandoRelatorio.dados) : undefined}
+      />
 
       {/* Arquivos Contratuais */}
       <Card>
@@ -423,85 +509,158 @@ export function ContratoArquivos({ contratoId, className }: ContratoArquivosProp
         </CardContent>
       </Card>
 
-      {/* Arquivos de Relatórios */}
+      {/* Relatórios de Fiscalização */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <IconFile className="w-5 h-5 text-green-600" />
-            Arquivos de Relatórios
-            <Badge variant="secondary">{arquivosRelatorios.length}</Badge>
-          </CardTitle>
-          <CardDescription>
-            Relatórios de fiscalização aprovados pelo administrador
-          </CardDescription>
+          <div className="flex flex-wrap justify-between items-start gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-green-600" />
+                Relatórios de Fiscalização
+                <Badge variant="secondary">{relatoriosFiltrados.length}</Badge>
+              </CardTitle>
+              <CardDescription>
+                Relatórios preenchidos pelo fiscal via formulário do sistema
+              </CardDescription>
+            </div>
+            {mesesDisponiveis.length > 0 && (
+              <div className="flex items-center gap-2">
+                <IconCalendar className="w-4 h-4 text-gray-500" />
+                <select
+                  value={filtroMes}
+                  onChange={(e) => setFiltroMes(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Todos os meses</option>
+                  {mesesDisponiveis.map((mes) => {
+                    const [ano, m] = mes.split("-");
+                    const label = new Date(Number(ano), Number(m) - 1).toLocaleDateString("pt-BR", {
+                      month: "long",
+                      year: "numeric",
+                    });
+                    return (
+                      <option key={mes} value={mes}>
+                        {label.charAt(0).toUpperCase() + label.slice(1)}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          {arquivosRelatorios.length === 0 ? (
+          {relatoriosFiltrados.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
-              <IconFile className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-              <p>Nenhum relatório aprovado encontrado</p>
+              <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+              <p>
+                {filtroMes
+                  ? "Nenhum relatório encontrado para o mês selecionado"
+                  : "Nenhum relatório de fiscalização salvo ainda"}
+              </p>
             </div>
           ) : (
             <div className="rounded-md border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Relatório</TableHead>
-                    <TableHead>Data Envio</TableHead>
-                    <TableHead>Fiscal</TableHead>
+                    <TableHead>Período</TableHead>
+                    <TableHead>Data do Relatório</TableHead>
+                    <TableHead>Salvo em</TableHead>
                     <TableHead className="text-right">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {arquivosRelatorios.map((arquivo) => (
-                    <TableRow key={arquivo.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          {getFileIcon(arquivo.tipo)}
-                          <div>
-                            <p className="font-medium">{arquivo.nome}</p>
-                            <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
-                              Relatório
-                            </Badge>
+                  {relatoriosFiltrados.map((rel) => {
+                    const fmtDate = (d: string | null) =>
+                      d ? new Date(d).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—";
+                    const periodo =
+                      rel.periodo_inicio && rel.periodo_fim
+                        ? `${fmtDate(rel.periodo_inicio)} → ${fmtDate(rel.periodo_fim)}`
+                        : "—";
+
+                    return (
+                      <TableRow key={rel.id}>
+                        <TableCell className="font-medium">{periodo}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 text-sm">
+                            <IconCalendar className="w-3 h-3" />
+                            {fmtDate(rel.data_relatorio)}
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <IconCalendar className="w-3 h-3" />
-                          {formatDate(arquivo.data_upload)}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1 text-sm">
-                          <IconUser className="w-3 h-3" />
-                          {arquivo.uploadado_por_nome || 'Fiscal'}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDownload(arquivo)}
-                          >
-                            <IconDownload className="w-4 h-4" />
-                          </Button>
-                          {canDelete && arquivo.categoria === 'contratual' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setDeleteDialog({ open: true, arquivo })}
-                              className="text-red-600 hover:text-red-700"
-                              title="Excluir arquivo contratual"
+                        </TableCell>
+                        <TableCell className="text-sm text-gray-500">
+                          {rel.created_at
+                            ? new Date(rel.created_at).toLocaleDateString("pt-BR")
+                            : "—"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end items-center gap-2">
+
+                            {/* === EDIÇÃO DE RASCUNHO — disponível para quem visualiza o rascunho (fiscal ou gestor/admin) === */}
+                            {rel.status === "rascunho" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2.5 text-xs gap-1 border-amber-400 text-amber-700 hover:bg-amber-50"
+                                disabled={carregandoEdicao === rel.id || enviando === rel.id}
+                                onClick={() => handleAbrirEdicao(rel.id)}
+                              >
+                                {carregandoEdicao === rel.id
+                                  ? <span className="w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                  : <>✏️ Editar</>}
+                              </Button>
+                            )}
+
+                            {/* === AÇÕES DO FISCAL === */}
+                            {ehFiscal && rel.status === "rascunho" && (
+                              <Button
+                                size="sm"
+                                className="h-7 px-2.5 text-xs gap-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                disabled={enviando === rel.id || carregandoEdicao === rel.id}
+                                onClick={() => handleEnviarParaGestor(rel.id)}
+                              >
+                                {enviando === rel.id
+                                  ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                  : <>📤 Enviar</>}
+                              </Button>
+                            )}
+                            {ehFiscal && rel.status === "nao_conforme" && (
+                              <span
+                                className="text-xs text-red-600 italic self-center max-w-[200px] truncate"
+                                title={rel.gestor_observacao ?? "Retornado pelo gestor"}
+                              >
+                                {rel.gestor_observacao ? `Obs: ${rel.gestor_observacao}` : "Retornado pelo gestor"}
+                              </span>
+                            )}
+
+                            <a
+                              href={getUrlPdfVisualizarRelatorio(rel.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Visualizar relatório em PDF"
                             >
-                              <IconTrash className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
+                                <IconEye className="w-3.5 h-3.5" />
+                                Visualizar
+                              </Button>
+                            </a>
+
+                            <a
+                              href={getUrlPdfRelatorioSalvo(rel.id)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Baixar relatório em PDF"
+                            >
+                              <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1">
+                                <IconDownload className="w-3.5 h-3.5" />
+                                Baixar
+                              </Button>
+                            </a>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>

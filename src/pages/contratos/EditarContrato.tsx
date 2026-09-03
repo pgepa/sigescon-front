@@ -44,8 +44,8 @@ const contractSchema = z.object({
     contratado_id: z.string().min(1, "Contratado é obrigatório"),
     modalidade_id: z.string().min(1, "Modalidade é obrigatória"),
     status_id: z.string().min(1, "Status é obrigatório"),
-    gestor_id: z.string().min(1, "Gestor é obrigatório"),
-    fiscal_id: z.string().min(1, "Fiscal é obrigatório"),
+    gestor_id: z.string().optional(),
+    fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
     valor_anual: z.string().optional().refine(
         (val) => !val || val === "" || parseFloat(val) >= 0,
@@ -61,6 +61,8 @@ const contractSchema = z.object({
     doe: z.string().optional(),
     data_doe: z.string().optional(),
     garantia: z.string().optional(),
+    portaria_fiscal: z.string().optional(),
+    nr_adesao_ata: z.string().optional(),
 });
 
 type ContractFormData = z.infer<typeof contractSchema>;
@@ -69,22 +71,40 @@ type ContractFormData = z.infer<typeof contractSchema>;
 interface SearchableSelectProps {
     options: Array<{ id: number | string; nome: string }>;
     value: string;
-    onValueChange: (value: string) => void;
+    onValueChange: (value: string, label?: string) => void;
     placeholder: string;
+    // Quando informado, a busca por texto é delegada ao servidor (debounced) em vez de
+    // filtrar apenas a lista local de `options` — necessário quando há mais itens do que
+    // a página inicial carrega.
+    onSearch?: (term: string) => void;
+    // Rótulo do item atualmente selecionado, usado como fallback quando ele não está
+    // presente em `options` (ex.: após uma busca que não o retornou).
+    selectedLabel?: string;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, onSearch, selectedLabel }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
     const dropdownRef = React.useRef<HTMLDivElement>(null);
 
     useEffect(() => {
+        if (onSearch) {
+            // busca já vem filtrada do servidor
+            setFilteredOptions(options);
+            return;
+        }
         const filtered = options.filter(option =>
             option.nome.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setFilteredOptions(filtered);
-    }, [searchTerm, options]);
+    }, [searchTerm, options, onSearch]);
+
+    useEffect(() => {
+        if (!onSearch) return;
+        const timeout = setTimeout(() => onSearch(searchTerm), 300);
+        return () => clearTimeout(timeout);
+    }, [searchTerm, onSearch]);
 
     // Fechar dropdown ao clicar fora
     useEffect(() => {
@@ -105,9 +125,10 @@ function SearchableSelect({ options, value, onValueChange, placeholder }: Search
     }, [isOpen]);
 
     const selectedOption = options.find(option => option.id.toString() === value);
+    const displayLabel = selectedOption?.nome ?? (value ? selectedLabel : undefined);
 
-    const handleSelect = (optionValue: string) => {
-        onValueChange(optionValue);
+    const handleSelect = (option: { id: number | string; nome: string }) => {
+        onValueChange(option.id.toString(), option.nome);
         setIsOpen(false);
         setSearchTerm("");
     };
@@ -124,8 +145,8 @@ function SearchableSelect({ options, value, onValueChange, placeholder }: Search
                 onClick={() => setIsOpen(!isOpen)}
                 className="w-full flex items-center justify-between px-3 py-2 text-left bg-white border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors hover:border-blue-400"
             >
-                <span className={`block truncate ${!selectedOption ? 'text-gray-500' : 'text-blue-900'}`}>
-                    {selectedOption ? selectedOption.nome : placeholder}
+                <span className={`block truncate ${!displayLabel ? 'text-gray-500' : 'text-blue-900'}`}>
+                    {displayLabel ?? placeholder}
                 </span>
                 <ChevronDown className={`h-4 w-4 text-blue-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -164,7 +185,7 @@ function SearchableSelect({ options, value, onValueChange, placeholder }: Search
                                 <button
                                     key={option.id}
                                     type="button"
-                                    onClick={() => handleSelect(option.id.toString())}
+                                    onClick={() => handleSelect(option)}
                                     className={`w-full px-4 py-2.5 text-left text-sm hover:bg-blue-50 transition-colors border-b border-blue-50 last:border-b-0 ${
                                         value === option.id.toString()
                                             ? 'bg-blue-100 text-blue-900 font-medium'
@@ -195,6 +216,8 @@ export function EditarContrato() {
     const [existingFiles, setExistingFiles] = useState<{ id: number; nome_arquivo: string; data_upload?: string }[]>([]);
     const [newFiles, setNewFiles] = useState<File[]>([]);
     const [fileWasDeleted, setFileWasDeleted] = useState(false);
+    const [selectedPortariaFile, setSelectedPortariaFile] = useState<File | null>(null);
+    const [selectedAtaFile, setSelectedAtaFile] = useState<File | null>(null);
 
     // Função para calcular tamanho total dos arquivos
     const getTotalFileSize = (files: File[]) => {
@@ -214,6 +237,10 @@ export function EditarContrato() {
 
     // Estados para controlar os valores dos selects customizados
     const [selectedContratado, setSelectedContratado] = useState("");
+    // Nome do contratado selecionado, usado para exibir o valor atual mesmo quando ele
+    // não está entre os resultados de uma busca (a lista de contratados pode ter mais
+    // itens do que a página inicial carrega)
+    const [selectedContratadoNome, setSelectedContratadoNome] = useState("");
     const [selectedGestor, setSelectedGestor] = useState("");
     const [selectedFiscal, setSelectedFiscal] = useState("");
     const [selectedFiscalSubstituto, setSelectedFiscalSubstituto] = useState("");
@@ -302,12 +329,15 @@ export function EditarContrato() {
                     doe: contractData.doe ?? undefined,
                     data_doe: contractData.data_doe ? new Date(contractData.data_doe).toISOString().split('T')[0] : undefined,
                     garantia: (contractData as any)?.garantia ? new Date((contractData as any).garantia).toISOString().split('T')[0] : undefined,
+                    portaria_fiscal: (contractData as any)?.portaria_fiscal ?? undefined,
+                    nr_adesao_ata: (contractData as any)?.nr_adesao_ata ?? undefined,
                 };
 
                 reset(formattedData as Partial<ContractFormData>);
 
                 // Inicializar estados dos selects customizados
                 setSelectedContratado(String(contractData.contratado_id ?? ""));
+                setSelectedContratadoNome(contractData.contratado_nome ?? "");
                 setSelectedGestor(String(contractData.gestor_id ?? ""));
                 setSelectedFiscal(String(contractData.fiscal_id ?? ""));
                 setSelectedFiscalSubstituto(contractData.fiscal_substituto_id != null ? String(contractData.fiscal_substituto_id) : "");
@@ -338,12 +368,24 @@ export function EditarContrato() {
         loadContractData();
     }, [id, navigate, reset]);
 
+    // Busca contratados no servidor (a lista pode ter mais itens do que a página inicial de 100 carrega)
+    const handleSearchContratados = React.useCallback(async (term: string) => {
+        try {
+            const res = await getContratados({ page: 1, per_page: 50, nome: term || undefined });
+            setContratados(res.data || res);
+        } catch (err) {
+            console.error("Erro ao buscar contratados:", err);
+        }
+    }, []);
+
     // **FUNÇÃO onSubmit ATUALIZADA PARA USAR A API**
     async function onSubmit(data: ContractFormData) {
         const hasFormChanges = Object.keys(dirtyFields).length > 0;
         const hasNewFiles = newFiles.length > 0;
+        const hasNewPortaria = !!selectedPortariaFile;
+        const hasNewAta = !!selectedAtaFile;
 
-        if (!hasFormChanges && !hasNewFiles && !fileWasDeleted) {
+        if (!hasFormChanges && !hasNewFiles && !hasNewPortaria && !hasNewAta && !fileWasDeleted) {
             toast.info("Nenhuma alteração foi realizada para salvar.");
             return;
         }
@@ -364,6 +406,16 @@ export function EditarContrato() {
                     }
                 }
             });
+
+            // Adicionar arquivo da portaria se selecionado
+            if (selectedPortariaFile) {
+                formData.append("documento_portaria", selectedPortariaFile);
+            }
+
+            // Adicionar arquivo da ata de registro de preço se selecionado
+            if (selectedAtaFile) {
+                formData.append("documento_ata_registro", selectedAtaFile);
+            }
 
             // Adiciona múltiplos arquivos (mesmo padrão do NovoContrato)
             newFiles.forEach(file => {
@@ -418,11 +470,14 @@ export function EditarContrato() {
                     doe: refreshed.doe ?? undefined,
                     data_doe: refreshed.data_doe ? new Date(refreshed.data_doe).toISOString().split('T')[0] : undefined,
                     garantia: (refreshed as any)?.garantia ? new Date((refreshed as any).garantia).toISOString().split('T')[0] : undefined,
+                    portaria_fiscal: (refreshed as any)?.portaria_fiscal ?? undefined,
+                    nr_adesao_ata: (refreshed as any)?.nr_adesao_ata ?? undefined,
                 };
                 reset(refreshedFormatted);
 
                 // Atualizar estados dos selects customizados
                 setSelectedContratado(String(refreshed.contratado_id ?? ""));
+                setSelectedContratadoNome((refreshed as any)?.contratado_nome ?? "");
                 setSelectedGestor(String(refreshed.gestor_id ?? ""));
                 setSelectedFiscal(String(refreshed.fiscal_id ?? ""));
                 setSelectedFiscalSubstituto(refreshed.fiscal_substituto_id != null ? String(refreshed.fiscal_substituto_id) : "");
@@ -624,14 +679,66 @@ export function EditarContrato() {
                     <textarea {...register("objeto")} className="mt-1 border rounded-lg p-2 w-full h-20" />
                     {errors.objeto && <p className="text-red-500 text-sm">{errors.objeto.message}</p>}
                 </div>
+
+                {/* Nº Adesão Ata de Registro de Preço */}
+                <div className="md:col-span-1 lg:col-span-2">
+                    <label className="font-medium">Nº Adesão Ata de Registro de Preço</label>
+                    <div className="mt-1 flex gap-2">
+                        <input
+                            type="text"
+                            {...register("nr_adesao_ata")}
+                            className="border rounded-lg p-2 flex-1"
+                            placeholder="Ex: ATA nº 001/2025"
+                        />
+                        <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap">
+                            <Upload size={16} />
+                            {selectedAtaFile ? "Trocar" : "Upload"}
+                            <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+                                            toast.error("Tipo de arquivo não permitido");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (file.size > MAX_FILE_SIZE) {
+                                            toast.error("Arquivo muito grande (máx. 10MB)");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        setSelectedAtaFile(file);
+                                        toast.success(`Arquivo "${file.name}" selecionado`);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                accept={ACCEPT_STRING}
+                            />
+                        </label>
+                    </div>
+                    {selectedAtaFile && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded p-2">
+                            <span className="truncate flex-1">{selectedAtaFile.name}</span>
+                            <button type="button" onClick={() => { setSelectedAtaFile(null); toast.info("Arquivo removido"); }} className="text-red-500 hover:text-red-700">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 <div className="md:col-span-1 lg:col-span-2">
                     <label className="font-medium">Contratado *</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={contratados}
                             value={selectedContratado}
-                            onValueChange={(value) => {
+                            selectedLabel={selectedContratadoNome}
+                            onSearch={handleSearchContratados}
+                            onValueChange={(value, label) => {
                                 setSelectedContratado(value);
+                                setSelectedContratadoNome(label ?? "");
                                 setValue("contratado_id", value, { shouldDirty: true });
                             }}
                             placeholder="Selecione um contratado"
@@ -640,7 +747,7 @@ export function EditarContrato() {
                     {errors.contratado_id && <p className="text-red-500 text-sm">{errors.contratado_id.message}</p>}
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Gestor *</label>
+                    <label className="font-medium">Gestor</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosGestores}
@@ -655,7 +762,7 @@ export function EditarContrato() {
                     {errors.gestor_id && <p className="text-red-500 text-sm">{errors.gestor_id.message}</p>}
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Fiscal *</label>
+                    <label className="font-medium">Fiscal</label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={usuariosFiscais}
@@ -683,6 +790,55 @@ export function EditarContrato() {
                         />
                     </div>
                 </div>
+
+                {/* Portaria de Designação do Fiscal */}
+                <div className="md:col-span-1 lg:col-span-2">
+                    <label className="font-medium">Portaria de Designação do Fiscal</label>
+                    <div className="mt-1 flex gap-2">
+                        <input
+                            type="text"
+                            {...register("portaria_fiscal")}
+                            className="border rounded-lg p-2 flex-1"
+                            placeholder="Ex: Portaria nº 123/2025"
+                        />
+                        <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap">
+                            <Upload size={16} />
+                            {selectedPortariaFile ? "Trocar" : "Upload"}
+                            <input
+                                type="file"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                        if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+                                            toast.error("Tipo de arquivo não permitido");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        if (file.size > MAX_FILE_SIZE) {
+                                            toast.error("Arquivo muito grande (máx. 10MB)");
+                                            e.target.value = '';
+                                            return;
+                                        }
+                                        setSelectedPortariaFile(file);
+                                        toast.success(`Arquivo "${file.name}" selecionado`);
+                                    }
+                                    e.target.value = '';
+                                }}
+                                accept={ACCEPT_STRING}
+                            />
+                        </label>
+                    </div>
+                    {selectedPortariaFile && (
+                        <div className="mt-2 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded p-2">
+                            <span className="truncate flex-1">{selectedPortariaFile.name}</span>
+                            <button type="button" onClick={() => { setSelectedPortariaFile(null); toast.info("Arquivo removido"); }} className="text-red-500 hover:text-red-700">
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    )}
+                </div>
+
                 <div>
                     <label className="font-medium">Data Início</label>
                     <input type="date" {...register("data_inicio")} className="mt-1 border rounded-lg p-2 w-full" />
@@ -735,6 +891,7 @@ export function EditarContrato() {
                     <label className="font-medium">Base Legal</label>
                     <input type="text" {...register("base_legal")} className="mt-1 border rounded-lg p-2 w-full" />
                 </div>
+
                 <div className="lg:col-span-4">
                     <label className="font-medium">Termos Contratuais</label>
                     <div className="mt-1">
