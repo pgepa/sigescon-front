@@ -1132,6 +1132,10 @@ function gerarDescricaoAditivo(campos: CamposDescricaoAditivo): string {
     if (tipo === "Misto") {
         return `Aditamento de valor e prazo - ${descricaoValor()} - ${descricaoVigencia()}`;
     }
+    if (tipo === "Outros") {
+        const assin = dataAssinatura ? fmt(dataAssinatura) : "—";
+        return `Outras alterações - Data de assinatura: ${assin}`;
+    }
     return "";
 }
 
@@ -1148,13 +1152,21 @@ function isDataValida(dataStr: string): boolean {
 
 // Valida os campos de um termo aditivo (criação ou edição) e retorna a mensagem de erro
 // listando apenas o que de fato está faltando, ou null se estiver tudo certo.
-function validarCamposAditivo(dados: Partial<TermoAditivoCreate> | undefined): string | null {
+function validarCamposAditivo(
+    dados: Partial<TermoAditivoCreate> | undefined,
+    arquivoPresente: boolean = true
+): string | null {
     if (!dados) return "Preencha os campos do termo aditivo.";
 
     const faltando: string[] = [];
     if (!dados.tipo) faltando.push("Termo Aditivo");
-    if (!dados.objeto) faltando.push("Descrição");
     if (!dados.data_assinatura) faltando.push("Data Assinatura");
+    if (!dados.data_inicio) faltando.push("Data Início");
+    if (!dados.pae || !dados.pae.trim()) faltando.push("PAE");
+    if (!dados.data_publicacao) faltando.push("Data Publicação");
+    if (!arquivoPresente) faltando.push("Arquivo do Termo Aditivo");
+    if (!dados.objeto || !dados.objeto.trim()) faltando.push("Descrição");
+
     if (faltando.length > 0) {
         return `Preencha: ${faltando.join(", ")}.`;
     }
@@ -1171,38 +1183,21 @@ function validarCamposAditivo(dados: Partial<TermoAditivoCreate> | undefined): s
         }
     }
 
-    if (dados.tipo === "Misto" || dados.tipo === "Prazo") {
-        const faltandoData: string[] = [];
-        if (!dados.data_inicio) faltandoData.push("Data Início");
-        if (!dados.nova_data_fim) faltandoData.push("Nova Data Fim");
-        if (faltandoData.length > 0) {
-            return `Preencha: ${faltandoData.join(", ")}.`;
+    if (dados.tipo === "Prazo" || dados.tipo === "Misto") {
+        if (!dados.nova_data_fim) {
+            return "Preencha: Nova Data Fim.";
+        }
+        if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
+            return "Nova Data Fim não pode ser anterior à Data Início.";
         }
     }
 
-    if ((dados.tipo === "Misto" || dados.tipo === "Valor") && !dados.valor_acrescimo && !dados.valor_supressao) {
-        return `Para aditivo ${dados.tipo}, preencha Valor Acréscimo ou Valor Supressão.`;
-    }
-
-    // Prazo e Valor são mutuamente exclusivos quanto ao que alteram — se precisar dos dois,
-    // o tipo correto é Misto. Isso evita um aditivo "Prazo" carregando valor, ou um
-    // "Valor" carregando data, o que tornaria o tipo Misto redundante.
-    if (dados.tipo === "Prazo" && (dados.valor_acrescimo || dados.valor_supressao)) {
-        return "Aditivo de Prazo não pode ter Valor Acréscimo ou Valor Supressão preenchido. Use o tipo Misto.";
-    }
-    if (dados.tipo === "Valor" && (dados.data_inicio || dados.nova_data_fim)) {
-        return "Aditivo de Valor não pode ter Data Início ou Nova Data Fim preenchido. Use o tipo Misto.";
-    }
-
-    // Data Início e Nova Data Fim representam uma mudança de vigência e não fazem
-    // sentido preenchidas parcialmente — se uma foi informada, a outra também precisa ser
-    // (em Misto/Prazo isso já é garantido acima; aqui cobre o caso de Valor com só uma data).
-    if (!!dados.data_inicio !== !!dados.nova_data_fim) {
-        return "Preencha: Data Início e Nova Data Fim juntos, ou deixe os dois em branco.";
-    }
-
-    if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
-        return "Nova Data Fim não pode ser anterior à Data Início.";
+    if (dados.tipo === "Valor" || dados.tipo === "Misto") {
+        const acrescimo = Number(dados.valor_acrescimo) || 0;
+        const supressao = Number(dados.valor_supressao) || 0;
+        if (acrescimo <= 0 && supressao <= 0) {
+            return `Para aditivo ${dados.tipo}, preencha Valor Acréscimo ou Valor Supressão.`;
+        }
     }
 
     return null;
@@ -1288,7 +1283,8 @@ export function ContratosDataTable() {
     const handleSalvarAditivo = async (contratoId: number, e: React.MouseEvent) => {
         e.stopPropagation();
         const dados = novoAditivo[contratoId];
-        const erroValidacao = validarCamposAditivo(dados);
+        const arquivo = arquivoAditivo[contratoId];
+        const erroValidacao = validarCamposAditivo(dados, !!arquivo);
         if (erroValidacao) {
             toast.error(erroValidacao);
             return;
@@ -1296,7 +1292,6 @@ export function ContratosDataTable() {
         setSalvandoAditivo(prev => new Set(prev).add(contratoId));
         try {
             const criado = await createTermoAditivo(contratoId, dados as TermoAditivoCreate);
-            const arquivo = arquivoAditivo[contratoId];
             if (arquivo) {
                 try {
                     await uploadArquivoAditivo(contratoId, criado.id, arquivo);
@@ -1413,7 +1408,9 @@ export function ContratosDataTable() {
     const handleSalvarEdicaoAditivo = async (contratoId: number, aditivoId: number, e: React.MouseEvent) => {
         e.stopPropagation();
         const dados = editandoAditivo[aditivoId];
-        const erroValidacao = validarCamposAditivo(dados);
+        const aditivoExistente = (aditivosMap[contratoId] ?? []).find(a => a.id === aditivoId);
+        const temArquivo = !!(arquivoEdicaoAditivo[aditivoId] || aditivoExistente?.arquivo_id);
+        const erroValidacao = validarCamposAditivo(dados, temArquivo);
         if (erroValidacao) {
             toast.error(erroValidacao);
             return;
@@ -1948,218 +1945,247 @@ export function ContratosDataTable() {
                                                                         </div>
 
                                                                         {/* Formulário inline */}
-                                                                        {mostrarFormAditivo.has(c.id) && (
-                                                                            <div className="mb-3 p-4 bg-white rounded-md border border-indigo-200 grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
-                                                                                {/* Linha 1 */}
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
-                                                                                    <Select
-                                                                                        onValueChange={v => {
-                                                                                            const tipo = v as TermoAditivoCreate["tipo"];
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
+                                                                        {mostrarFormAditivo.has(c.id) && (() => {
+                                                                            const tipoAtual = novoAditivo[c.id]?.tipo;
+                                                                            const isPrazo = tipoAtual === "Prazo";
+                                                                            const isValor = tipoAtual === "Valor";
+                                                                            const isMisto = tipoAtual === "Misto";
+
+                                                                            return (
+                                                                                <div className="mb-3 p-4 bg-white rounded-md border border-indigo-200 grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
+                                                                                    {/* Termo Aditivo (Tipo) * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
+                                                                                        <Select
+                                                                                            onValueChange={v => {
+                                                                                                const tipo = v as TermoAditivoCreate["tipo"];
+                                                                                                const curr = novoAditivo[c.id] ?? {};
+                                                                                                const manual = objetoManualNovo.has(c.id);
+                                                                                                const atualizado: Partial<TermoAditivoCreate> = {
+                                                                                                    ...curr,
                                                                                                     tipo,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, tipo })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                        value={novoAditivo[c.id]?.tipo ?? ""}
-                                                                                    >
-                                                                                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                                                        <SelectContent>
-                                                                                            {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
-                                                                                                <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
-                                                                                            ))}
-                                                                                        </SelectContent>
-                                                                                    </Select>
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Data Assinatura *</label>
-                                                                                    <Input
-                                                                                        type="date"
-                                                                                        className="h-8 text-xs"
-                                                                                        value={novoAditivo[c.id]?.data_assinatura ?? ""}
-                                                                                        onChange={e => {
-                                                                                            const data_assinatura = e.target.value;
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
-                                                                                                    data_assinatura,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">
-                                                                                        Data Início{(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Prazo") ? " *" : ""}
-                                                                                    </label>
-                                                                                    <Input
-                                                                                        type="date"
-                                                                                        className="h-8 text-xs"
-                                                                                        value={novoAditivo[c.id]?.data_inicio ?? ""}
-                                                                                        onChange={e => {
-                                                                                            const data_inicio = e.target.value || null;
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
-                                                                                                    data_inicio,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">
-                                                                                        Nova Data Fim{(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Prazo") ? " *" : ""}
-                                                                                    </label>
-                                                                                    <Input
-                                                                                        type="date"
-                                                                                        className="h-8 text-xs"
-                                                                                        value={novoAditivo[c.id]?.nova_data_fim ?? ""}
-                                                                                        onChange={e => {
-                                                                                            const nova_data_fim = e.target.value || null;
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const manual = objetoManualNovo.has(c.id);
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
-                                                                                                    nova_data_fim,
-                                                                                                    objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$){(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Valor") ? " *" : ""}</label>
-                                                                                    <Input
-                                                                                        type="number"
-                                                                                        className="h-8 text-xs"
-                                                                                        placeholder="0,00"
-                                                                                        value={novoAditivo[c.id]?.valor_acrescimo ?? ""}
-                                                                                        onChange={e => {
-                                                                                            const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const tipo = curr.tipo ?? "Valor";
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
-                                                                                                    tipo,
-                                                                                                    valor_acrescimo,
-                                                                                                    objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Valor Supressão (R$){(novoAditivo[c.id]?.tipo === "Misto" || novoAditivo[c.id]?.tipo === "Valor") ? " *" : ""}</label>
-                                                                                    <Input
-                                                                                        type="number"
-                                                                                        className="h-8 text-xs"
-                                                                                        placeholder="0,00"
-                                                                                        value={novoAditivo[c.id]?.valor_supressao ?? ""}
-                                                                                        onChange={e => {
-                                                                                            const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
-                                                                                            const curr = novoAditivo[c.id] ?? {};
-                                                                                            const tipo = curr.tipo ?? "Valor";
-                                                                                            setNovoAditivo(prev => ({
-                                                                                                ...prev,
-                                                                                                [c.id]: {
-                                                                                                    ...prev[c.id],
-                                                                                                    tipo,
-                                                                                                    valor_supressao,
-                                                                                                    objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
-                                                                                                }
-                                                                                            }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                {/* Linha 2 */}
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">PAE</label>
-                                                                                    <Input
-                                                                                        className="h-8 text-xs"
-                                                                                        placeholder="Ex: 2025/123456"
-                                                                                        value={novoAditivo[c.id]?.pae ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Data Publicação</label>
-                                                                                    <Input
-                                                                                        type="date"
-                                                                                        className="h-8 text-xs"
-                                                                                        value={novoAditivo[c.id]?.data_publicacao ?? ""}
-                                                                                        onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_publicacao: e.target.value || null } }))}
-                                                                                    />
-                                                                                </div>
-                                                                                <div className="flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo</label>
-                                                                                    <label className="flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-                                                                                        <IconFileText className="w-4 h-4 shrink-0" />
-                                                                                        <span className="truncate">
-                                                                                            {arquivoAditivo[c.id]?.name ?? "Selecionar arquivo (PDF, DOC…)"}
-                                                                                        </span>
-                                                                                        <input
-                                                                                            type="file"
-                                                                                            className="hidden"
-                                                                                            accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                                    nova_data_fim: (tipo === "Prazo" || tipo === "Misto") ? curr.nova_data_fim : null,
+                                                                                                    valor_acrescimo: (tipo === "Valor" || tipo === "Misto") ? curr.valor_acrescimo : null,
+                                                                                                    valor_supressao: (tipo === "Valor" || tipo === "Misto") ? curr.valor_supressao : null,
+                                                                                                };
+                                                                                                atualizado.objeto = manual ? curr.objeto : gerarDescricaoAditivo(atualizado);
+                                                                                                setNovoAditivo(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [c.id]: atualizado
+                                                                                                }));
+                                                                                            }}
+                                                                                            value={tipoAtual ?? ""}
+                                                                                        >
+                                                                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                                                            <SelectContent>
+                                                                                                {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
+                                                                                                    <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
+                                                                                                ))}
+                                                                                            </SelectContent>
+                                                                                        </Select>
+                                                                                    </div>
+
+                                                                                    {/* Data Assinatura * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Data Assinatura *</label>
+                                                                                        <Input
+                                                                                            type="date"
+                                                                                            className="h-8 text-xs"
+                                                                                            value={novoAditivo[c.id]?.data_assinatura ?? ""}
                                                                                             onChange={e => {
-                                                                                                const f = e.target.files?.[0] ?? null;
-                                                                                                setArquivoAditivo(prev => ({ ...prev, [c.id]: f }));
+                                                                                                const data_assinatura = e.target.value;
+                                                                                                const curr = novoAditivo[c.id] ?? {};
+                                                                                                const manual = objetoManualNovo.has(c.id);
+                                                                                                setNovoAditivo(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [c.id]: {
+                                                                                                        ...prev[c.id],
+                                                                                                        data_assinatura,
+                                                                                                        objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
+                                                                                                    }
+                                                                                                }));
                                                                                             }}
                                                                                         />
-                                                                                    </label>
+                                                                                    </div>
+
+                                                                                    {/* Data Início * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                        <Input
+                                                                                            type="date"
+                                                                                            className="h-8 text-xs"
+                                                                                            value={novoAditivo[c.id]?.data_inicio ?? ""}
+                                                                                            onChange={e => {
+                                                                                                const data_inicio = e.target.value || null;
+                                                                                                const curr = novoAditivo[c.id] ?? {};
+                                                                                                const manual = objetoManualNovo.has(c.id);
+                                                                                                setNovoAditivo(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [c.id]: {
+                                                                                                        ...prev[c.id],
+                                                                                                        data_inicio,
+                                                                                                        objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
+                                                                                                    }
+                                                                                                }));
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* Nova Data Fim * (Prazo ou Misto) */}
+                                                                                    {(isPrazo || isMisto) && (
+                                                                                        <div className="flex flex-col gap-1">
+                                                                                            <label className="text-xs font-medium text-gray-600">Nova Data Fim *</label>
+                                                                                            <Input
+                                                                                                type="date"
+                                                                                                className="h-8 text-xs"
+                                                                                                value={novoAditivo[c.id]?.nova_data_fim ?? ""}
+                                                                                                onChange={e => {
+                                                                                                    const nova_data_fim = e.target.value || null;
+                                                                                                    const curr = novoAditivo[c.id] ?? {};
+                                                                                                    const manual = objetoManualNovo.has(c.id);
+                                                                                                    setNovoAditivo(prev => ({
+                                                                                                        ...prev,
+                                                                                                        [c.id]: {
+                                                                                                            ...prev[c.id],
+                                                                                                            nova_data_fim,
+                                                                                                            objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
+                                                                                                        }
+                                                                                                    }));
+                                                                                                }}
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Valor Acréscimo e Valor Supressão * (Valor ou Misto) */}
+                                                                                    {(isValor || isMisto) && (
+                                                                                        <>
+                                                                                            <div className="flex flex-col gap-1">
+                                                                                                <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
+                                                                                                <Input
+                                                                                                    type="number"
+                                                                                                    className="h-8 text-xs"
+                                                                                                    placeholder="0,00"
+                                                                                                    value={novoAditivo[c.id]?.valor_acrescimo ?? ""}
+                                                                                                    onChange={e => {
+                                                                                                        const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                        const curr = novoAditivo[c.id] ?? {};
+                                                                                                        const tipo = curr.tipo ?? "Valor";
+                                                                                                        setNovoAditivo(prev => ({
+                                                                                                            ...prev,
+                                                                                                            [c.id]: {
+                                                                                                                ...prev[c.id],
+                                                                                                                tipo,
+                                                                                                                valor_acrescimo,
+                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
+                                                                                                            }
+                                                                                                        }));
+                                                                                                    }}
+                                                                                                />
+                                                                                            </div>
+                                                                                            <div className="flex flex-col gap-1">
+                                                                                                <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
+                                                                                                <Input
+                                                                                                    type="number"
+                                                                                                    className="h-8 text-xs"
+                                                                                                    placeholder="0,00"
+                                                                                                    value={novoAditivo[c.id]?.valor_supressao ?? ""}
+                                                                                                    onChange={e => {
+                                                                                                        const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                        const curr = novoAditivo[c.id] ?? {};
+                                                                                                        const tipo = curr.tipo ?? "Valor";
+                                                                                                        setNovoAditivo(prev => ({
+                                                                                                            ...prev,
+                                                                                                            [c.id]: {
+                                                                                                                ...prev[c.id],
+                                                                                                                tipo,
+                                                                                                                valor_supressao,
+                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
+                                                                                                            }
+                                                                                                        }));
+                                                                                                    }}
+                                                                                                />
+                                                                                            </div>
+                                                                                        </>
+                                                                                    )}
+
+                                                                                    {/* PAE * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">PAE *</label>
+                                                                                        <Input
+                                                                                            className="h-8 text-xs"
+                                                                                            placeholder="Ex: 2025/123456"
+                                                                                            value={novoAditivo[c.id]?.pae ?? ""}
+                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* Data Publicação * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
+                                                                                        <Input
+                                                                                            type="date"
+                                                                                            className="h-8 text-xs"
+                                                                                            value={novoAditivo[c.id]?.data_publicacao ?? ""}
+                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_publicacao: e.target.value || null } }))}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* Arquivo do Termo Aditivo * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo *</label>
+                                                                                        <label className={`flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed rounded text-xs transition-colors ${arquivoAditivo[c.id] ? "border-emerald-500 text-emerald-700 bg-emerald-50/50" : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"}`}>
+                                                                                            <IconFileText className="w-4 h-4 shrink-0" />
+                                                                                            <span className="truncate">
+                                                                                                {arquivoAditivo[c.id]?.name ?? "Selecionar arquivo (PDF, DOC…)"}
+                                                                                            </span>
+                                                                                            <input
+                                                                                                type="file"
+                                                                                                className="hidden"
+                                                                                                accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                                onChange={e => {
+                                                                                                    const f = e.target.files?.[0] ?? null;
+                                                                                                    setArquivoAditivo(prev => ({ ...prev, [c.id]: f }));
+                                                                                                }}
+                                                                                            />
+                                                                                        </label>
+                                                                                    </div>
+
+                                                                                    {/* Descrição do Termo Aditivo * */}
+                                                                                    <div className="col-span-2 md:col-span-4 flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
+                                                                                        <Input
+                                                                                            className="h-8 text-xs"
+                                                                                            placeholder="Preenchido automaticamente conforme o tipo..."
+                                                                                            value={novoAditivo[c.id]?.objeto ?? ""}
+                                                                                            onChange={e => {
+                                                                                                setObjetoManualNovo(prev => new Set(prev).add(c.id));
+                                                                                                setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], objeto: e.target.value } }));
+                                                                                            }}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* Linha — botões */}
+                                                                                    <div className="col-span-2 md:col-span-4 flex items-center gap-2 justify-end">
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            className="h-8 text-xs px-6 bg-indigo-600 hover:bg-indigo-700"
+                                                                                            onClick={(e) => handleSalvarAditivo(c.id, e)}
+                                                                                            disabled={salvandoAditivo.has(c.id)}
+                                                                                        >
+                                                                                            {salvandoAditivo.has(c.id) ? "Salvando..." : "Salvar"}
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            variant="outline"
+                                                                                            className="h-8 text-xs"
+                                                                                            onClick={(e) => { e.stopPropagation(); setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); setObjetoManualNovo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
+                                                                                        >
+                                                                                            Cancelar
+                                                                                        </Button>
+                                                                                    </div>
                                                                                 </div>
-                                                                                <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
-                                                                                    <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
-                                                                                    <Input
-                                                                                        className="h-8 text-xs"
-                                                                                        placeholder="Preenchido automaticamente conforme o tipo..."
-                                                                                        value={novoAditivo[c.id]?.objeto ?? ""}
-                                                                                        onChange={e => {
-                                                                                            setObjetoManualNovo(prev => new Set(prev).add(c.id));
-                                                                                            setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], objeto: e.target.value } }));
-                                                                                        }}
-                                                                                    />
-                                                                                </div>
-                                                                                {/* Linha 3 — botões */}
-                                                                                <div className="col-span-2 md:col-span-4 flex items-center gap-2 justify-end">
-                                                                                    <Button
-                                                                                        size="sm"
-                                                                                        className="h-8 text-xs px-6 bg-indigo-600 hover:bg-indigo-700"
-                                                                                        onClick={(e) => handleSalvarAditivo(c.id, e)}
-                                                                                        disabled={salvandoAditivo.has(c.id)}
-                                                                                    >
-                                                                                        {salvandoAditivo.has(c.id) ? "Salvando..." : "Salvar"}
-                                                                                    </Button>
-                                                                                    <Button
-                                                                                        size="sm"
-                                                                                        variant="outline"
-                                                                                        className="h-8 text-xs"
-                                                                                        onClick={(e) => { e.stopPropagation(); setMostrarFormAditivo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); setObjetoManualNovo(prev => { const n = new Set(prev); n.delete(c.id); return n; }); }}
-                                                                                    >
-                                                                                        Cancelar
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
+                                                                            );
+                                                                        })()}
 
                                                                         {/* Lista de aditivos */}
                                                                         {aditivosLoading.has(c.id) ? (
@@ -2334,220 +2360,252 @@ export function ContratosDataTable() {
                                                                                                     </td>
                                                                                                 )}
                                                                                             </tr>
-                                                                                            {editandoAditivo[ad.id] !== undefined && (
-                                                                                                <tr className="bg-indigo-50/40">
-                                                                                                    <td colSpan={9} className="px-3 py-3">
-                                                                                                        <div className="grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
-                                                                                                                <Select
-                                                                                                                    onValueChange={v => {
-                                                                                                                        const tipo = v as TermoAditivoCreate["tipo"];
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                tipo,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, tipo })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                    value={editandoAditivo[ad.id]?.tipo ?? ""}
-                                                                                                                >
-                                                                                                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                                                                                                    <SelectContent>
-                                                                                                                        {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
-                                                                                                                            <SelectItem key={value} value={value}>{label}</SelectItem>
-                                                                                                                        ))}
-                                                                                                                    </SelectContent>
-                                                                                                                </Select>
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Data Assinatura *</label>
-                                                                                                                <Input
-                                                                                                                    type="date"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    value={editandoAditivo[ad.id]?.data_assinatura ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        const data_assinatura = e.target.value;
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                data_assinatura,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">
-                                                                                                                    Data Início{(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Prazo") ? " *" : ""}
-                                                                                                                </label>
-                                                                                                                <Input
-                                                                                                                    type="date"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    value={editandoAditivo[ad.id]?.data_inicio ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        const data_inicio = e.target.value || null;
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                data_inicio,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">
-                                                                                                                    Nova Data Fim{(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Prazo") ? " *" : ""}
-                                                                                                                </label>
-                                                                                                                <Input
-                                                                                                                    type="date"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    value={editandoAditivo[ad.id]?.nova_data_fim ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        const nova_data_fim = e.target.value || null;
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const manual = objetoManualEdicao.has(ad.id);
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                nova_data_fim,
-                                                                                                                                objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$){(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Valor") ? " *" : ""}</label>
-                                                                                                                <Input
-                                                                                                                    type="number"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    placeholder="0,00"
-                                                                                                                    value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const tipo = curr.tipo ?? "Valor";
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                tipo,
-                                                                                                                                valor_acrescimo,
-                                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Valor Supressão (R$){(editandoAditivo[ad.id]?.tipo === "Misto" || editandoAditivo[ad.id]?.tipo === "Valor") ? " *" : ""}</label>
-                                                                                                                <Input
-                                                                                                                    type="number"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    placeholder="0,00"
-                                                                                                                    value={editandoAditivo[ad.id]?.valor_supressao ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
-                                                                                                                        const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                        const tipo = curr.tipo ?? "Valor";
-                                                                                                                        setEditandoAditivo(prev => ({
-                                                                                                                            ...prev,
-                                                                                                                            [ad.id]: {
-                                                                                                                                ...prev[ad.id],
-                                                                                                                                tipo,
-                                                                                                                                valor_supressao,
-                                                                                                                                objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
-                                                                                                                            }
-                                                                                                                        }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">PAE</label>
-                                                                                                                <Input
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    placeholder="Ex: 2025/123456"
-                                                                                                                    value={editandoAditivo[ad.id]?.pae ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Data Publicação</label>
-                                                                                                                <Input
-                                                                                                                    type="date"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    value={editandoAditivo[ad.id]?.data_publicacao ?? ""}
-                                                                                                                    onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_publicacao: e.target.value || null } }))}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo</label>
-                                                                                                                <label className="flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed border-gray-300 rounded text-xs text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors">
-                                                                                                                    <IconFileText className="w-4 h-4 shrink-0" />
-                                                                                                                    <span className="truncate">
-                                                                                                                        {arquivoEdicaoAditivo[ad.id]?.name ?? (ad.arquivo_nome ? `Atual: ${ad.arquivo_nome}` : "Selecionar arquivo (PDF, DOC…)")}
-                                                                                                                    </span>
-                                                                                                                    <input
-                                                                                                                        type="file"
-                                                                                                                        className="hidden"
-                                                                                                                        accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
-                                                                                                                        onChange={e => {
-                                                                                                                            const f = e.target.files?.[0] ?? null;
-                                                                                                                            setArquivoEdicaoAditivo(prev => ({ ...prev, [ad.id]: f }));
-                                                                                                                        }}
-                                                                                                                    />
-                                                                                                                </label>
-                                                                                                            </div>
-                                                                                                            <div className="col-span-1 md:col-span-3 flex flex-col gap-1">
-                                                                                                                <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
-                                                                                                                <Input
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    placeholder="Preenchido automaticamente conforme o tipo..."
-                                                                                                                    value={editandoAditivo[ad.id]?.objeto ?? ""}
-                                                                                                                    onChange={e => {
-                                                                                                                        setObjetoManualEdicao(prev => new Set(prev).add(ad.id));
-                                                                                                                        setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], objeto: e.target.value } }));
-                                                                                                                    }}
-                                                                                                                />
-                                                                                                            </div>
-                                                                                                            <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
-                                                                                                                <Button
-                                                                                                                    size="sm"
-                                                                                                                    variant="outline"
-                                                                                                                    className="h-8 text-xs"
-                                                                                                                    onClick={e => { e.stopPropagation(); setEditandoAditivo(prev => { const n = { ...prev }; delete n[ad.id]; return n; }); setObjetoManualEdicao(prev => { const n = new Set(prev); n.delete(ad.id); return n; }); }}
-                                                                                                                >
-                                                                                                                    Cancelar
-                                                                                                                </Button>
-                                                                                                                <Button
-                                                                                                                    size="sm"
-                                                                                                                    className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700"
-                                                                                                                    disabled={salvandoEdicaoAditivo.has(ad.id)}
-                                                                                                                    onClick={e => handleSalvarEdicaoAditivo(c.id, ad.id, e)}
-                                                                                                                >
-                                                                                                                    {salvandoEdicaoAditivo.has(ad.id) ? "Salvando..." : "Salvar"}
-                                                                                                                </Button>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    </td>
-                                                                                                </tr>
-                                                                                            )}
-                                                                                            </React.Fragment>
+                                                                                             {editandoAditivo[ad.id] !== undefined && (() => {
+                                                                                                 const tipoAtual = editandoAditivo[ad.id]?.tipo;
+                                                                                                 const isPrazo = tipoAtual === "Prazo";
+                                                                                                 const isValor = tipoAtual === "Valor";
+                                                                                                 const isMisto = tipoAtual === "Misto";
+
+                                                                                                 return (
+                                                                                                     <tr className="bg-indigo-50/40">
+                                                                                                         <td colSpan={9} className="px-3 py-3">
+                                                                                                             <div className="grid grid-cols-2 gap-3 md:grid-cols-4" onClick={e => e.stopPropagation()}>
+                                                                                                                 {/* Termo Aditivo (Tipo) * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Termo Aditivo *</label>
+                                                                                                                     <Select
+                                                                                                                         onValueChange={v => {
+                                                                                                                             const tipo = v as TermoAditivoCreate["tipo"];
+                                                                                                                             const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                             const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                             const atualizado: Partial<TermoAditivoUpdate> = {
+                                                                                                                                 ...curr,
+                                                                                                                                 tipo,
+                                                                                                                                 nova_data_fim: (tipo === "Prazo" || tipo === "Misto") ? curr.nova_data_fim : null,
+                                                                                                                                 valor_acrescimo: (tipo === "Valor" || tipo === "Misto") ? curr.valor_acrescimo : null,
+                                                                                                                                 valor_supressao: (tipo === "Valor" || tipo === "Misto") ? curr.valor_supressao : null,
+                                                                                                                             };
+                                                                                                                             atualizado.objeto = manual ? curr.objeto : gerarDescricaoAditivo(atualizado);
+                                                                                                                             setEditandoAditivo(prev => ({
+                                                                                                                                 ...prev,
+                                                                                                                                 [ad.id]: atualizado
+                                                                                                                             }));
+                                                                                                                         }}
+                                                                                                                         value={tipoAtual ?? ""}
+                                                                                                                     >
+                                                                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                                                                                         <SelectContent>
+                                                                                                                             {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
+                                                                                                                                 <SelectItem key={value} value={value}>{label}</SelectItem>
+                                                                                                                             ))}
+                                                                                                                         </SelectContent>
+                                                                                                                     </Select>
+                                                                                                                 </div>
+
+                                                                                                                 {/* Data Assinatura * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Assinatura *</label>
+                                                                                                                     <Input
+                                                                                                                         type="date"
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         value={editandoAditivo[ad.id]?.data_assinatura ?? ""}
+                                                                                                                         onChange={e => {
+                                                                                                                             const data_assinatura = e.target.value;
+                                                                                                                             const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                             const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                             setEditandoAditivo(prev => ({
+                                                                                                                                 ...prev,
+                                                                                                                                 [ad.id]: {
+                                                                                                                                     ...prev[ad.id],
+                                                                                                                                     data_assinatura,
+                                                                                                                                     objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_assinatura })
+                                                                                                                                 }
+                                                                                                                             }));
+                                                                                                                         }}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* Data Início * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                                                     <Input
+                                                                                                                         type="date"
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         value={editandoAditivo[ad.id]?.data_inicio ?? ""}
+                                                                                                                         onChange={e => {
+                                                                                                                             const data_inicio = e.target.value || null;
+                                                                                                                             const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                             const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                             setEditandoAditivo(prev => ({
+                                                                                                                                 ...prev,
+                                                                                                                                 [ad.id]: {
+                                                                                                                                     ...prev[ad.id],
+                                                                                                                                     data_inicio,
+                                                                                                                                     objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
+                                                                                                                                 }
+                                                                                                                             }));
+                                                                                                                         }}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* Nova Data Fim * (Prazo ou Misto) */}
+                                                                                                                 {(isPrazo || isMisto) && (
+                                                                                                                     <div className="flex flex-col gap-1">
+                                                                                                                         <label className="text-xs font-medium text-gray-600">Nova Data Fim *</label>
+                                                                                                                         <Input
+                                                                                                                             type="date"
+                                                                                                                             className="h-8 text-xs"
+                                                                                                                             value={editandoAditivo[ad.id]?.nova_data_fim ?? ""}
+                                                                                                                             onChange={e => {
+                                                                                                                                 const nova_data_fim = e.target.value || null;
+                                                                                                                                 const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                                 const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                                 setEditandoAditivo(prev => ({
+                                                                                                                                     ...prev,
+                                                                                                                                     [ad.id]: {
+                                                                                                                                         ...prev[ad.id],
+                                                                                                                                         nova_data_fim,
+                                                                                                                                         objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, nova_data_fim })
+                                                                                                                                     }
+                                                                                                                                 }));
+                                                                                                                             }}
+                                                                                                                         />
+                                                                                                                     </div>
+                                                                                                                 )}
+
+                                                                                                                 {/* Valor Acréscimo e Valor Supressão * (Valor ou Misto) */}
+                                                                                                                 {(isValor || isMisto) && (
+                                                                                                                     <>
+                                                                                                                         <div className="flex flex-col gap-1">
+                                                                                                                             <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
+                                                                                                                             <Input
+                                                                                                                                 type="number"
+                                                                                                                                 className="h-8 text-xs"
+                                                                                                                                 placeholder="0,00"
+                                                                                                                                 value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
+                                                                                                                                 onChange={e => {
+                                                                                                                                     const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                                     const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                                     const tipo = curr.tipo ?? "Valor";
+                                                                                                                                     setEditandoAditivo(prev => ({
+                                                                                                                                         ...prev,
+                                                                                                                                         [ad.id]: {
+                                                                                                                                             ...prev[ad.id],
+                                                                                                                                             tipo,
+                                                                                                                                             valor_acrescimo,
+                                                                                                                                             objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_acrescimo })
+                                                                                                                                         }
+                                                                                                                                     }));
+                                                                                                                                 }}
+                                                                                                                             />
+                                                                                                                         </div>
+                                                                                                                         <div className="flex flex-col gap-1">
+                                                                                                                             <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
+                                                                                                                             <Input
+                                                                                                                                 type="number"
+                                                                                                                                 className="h-8 text-xs"
+                                                                                                                                 placeholder="0,00"
+                                                                                                                                 value={editandoAditivo[ad.id]?.valor_supressao ?? ""}
+                                                                                                                                 onChange={e => {
+                                                                                                                                     const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                                     const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                                     const tipo = curr.tipo ?? "Valor";
+                                                                                                                                     setEditandoAditivo(prev => ({
+                                                                                                                                         ...prev,
+                                                                                                                                         [ad.id]: {
+                                                                                                                                             ...prev[ad.id],
+                                                                                                                                             tipo,
+                                                                                                                                             valor_supressao,
+                                                                                                                                             objeto: gerarDescricaoAditivo({ ...curr, tipo, valor_supressao })
+                                                                                                                                         }
+                                                                                                                                     }));
+                                                                                                                                 }}
+                                                                                                                             />
+                                                                                                                         </div>
+                                                                                                                     </>
+                                                                                                                 )}
+
+                                                                                                                 {/* PAE * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">PAE *</label>
+                                                                                                                     <Input
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         placeholder="Ex: 2025/123456"
+                                                                                                                         value={editandoAditivo[ad.id]?.pae ?? ""}
+                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* Data Publicação * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
+                                                                                                                     <Input
+                                                                                                                         type="date"
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         value={editandoAditivo[ad.id]?.data_publicacao ?? ""}
+                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_publicacao: e.target.value || null } }))}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* Arquivo do Termo Aditivo * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo *</label>
+                                                                                                                     <label className={`flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed rounded text-xs transition-colors ${arquivoEdicaoAditivo[ad.id] || ad.arquivo_id ? "border-emerald-500 text-emerald-700 bg-emerald-50/50" : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"}`}>
+                                                                                                                         <IconFileText className="w-4 h-4 shrink-0" />
+                                                                                                                         <span className="truncate">
+                                                                                                                             {arquivoEdicaoAditivo[ad.id]?.name ?? (ad.arquivo_nome ? `Atual: ${ad.arquivo_nome}` : "Selecionar arquivo (PDF, DOC…)")}
+                                                                                                                         </span>
+                                                                                                                         <input
+                                                                                                                             type="file"
+                                                                                                                             className="hidden"
+                                                                                                                             accept=".pdf,.doc,.docx,.odt,.xls,.xlsx"
+                                                                                                                             onChange={e => {
+                                                                                                                                 const f = e.target.files?.[0] ?? null;
+                                                                                                                                 setArquivoEdicaoAditivo(prev => ({ ...prev, [ad.id]: f }));
+                                                                                                                             }}
+                                                                                                                         />
+                                                                                                                     </label>
+                                                                                                                 </div>
+
+                                                                                                                 {/* Descrição do Termo Aditivo * */}
+                                                                                                                 <div className="col-span-2 md:col-span-4 flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
+                                                                                                                     <Input
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         placeholder="Preenchido automaticamente conforme o tipo..."
+                                                                                                                         value={editandoAditivo[ad.id]?.objeto ?? ""}
+                                                                                                                         onChange={e => {
+                                                                                                                             setObjetoManualEdicao(prev => new Set(prev).add(ad.id));
+                                                                                                                             setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], objeto: e.target.value } }));
+                                                                                                                         }}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* Linha — botões */}
+                                                                                                                 <div className="col-span-2 md:col-span-4 flex justify-end gap-2">
+                                                                                                                     <Button
+                                                                                                                         size="sm"
+                                                                                                                         variant="outline"
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         onClick={e => { e.stopPropagation(); setEditandoAditivo(prev => { const n = { ...prev }; delete n[ad.id]; return n; }); setObjetoManualEdicao(prev => { const n = new Set(prev); n.delete(ad.id); return n; }); }}
+                                                                                                                     >
+                                                                                                                         Cancelar
+                                                                                                                     </Button>
+                                                                                                                     <Button
+                                                                                                                         size="sm"
+                                                                                                                         className="h-8 text-xs bg-indigo-600 hover:bg-indigo-700"
+                                                                                                                         disabled={salvandoEdicaoAditivo.has(ad.id)}
+                                                                                                                         onClick={e => handleSalvarEdicaoAditivo(c.id, ad.id, e)}
+                                                                                                                     >
+                                                                                                                         {salvandoEdicaoAditivo.has(ad.id) ? "Salvando..." : "Salvar"}
+                                                                                                                     </Button>
+                                                                                                                 </div>
+                                                                                                             </div>
+                                                                                                         </td>
+                                                                                                     </tr>
+                                                                                                 );
+                                                                                             })()}
+                                                                                             </React.Fragment>
                                                                                         ); })}
                                                                                     </tbody>
                                                                                 </table>
