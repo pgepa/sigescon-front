@@ -1161,9 +1161,9 @@ function validarCamposAditivo(
     const faltando: string[] = [];
     if (!dados.tipo) faltando.push("Termo Aditivo");
     if (!dados.data_assinatura) faltando.push("Data Assinatura");
-    if ((dados.tipo === "Prazo" || dados.tipo === "Misto") && !dados.data_inicio) faltando.push("Data Início");
-    if (!dados.pae || !dados.pae.trim()) faltando.push("PAE");
     if (!dados.data_publicacao) faltando.push("Data Publicação");
+    if (!dados.pae || !dados.pae.trim()) faltando.push("PAE");
+    if ((dados.tipo === "Prazo" || dados.tipo === "Misto") && !dados.data_inicio) faltando.push("Nova Data Início");
     if (!arquivoPresente) faltando.push("Arquivo do Termo Aditivo");
     if (!dados.objeto || !dados.objeto.trim()) faltando.push("Descrição");
 
@@ -1173,9 +1173,9 @@ function validarCamposAditivo(
 
     const camposData: Array<[string, string | null | undefined]> = [
         ["Data Assinatura", dados.data_assinatura],
-        ["Data Início", dados.data_inicio],
-        ["Nova Data Fim", dados.nova_data_fim],
         ["Data Publicação", dados.data_publicacao],
+        ["Nova Data Início", dados.data_inicio],
+        ["Nova Data Fim", dados.nova_data_fim],
     ];
     for (const [nomeCampo, valor] of camposData) {
         if (valor && !isDataValida(valor)) {
@@ -1188,7 +1188,7 @@ function validarCamposAditivo(
             return "Preencha: Nova Data Fim.";
         }
         if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
-            return "Nova Data Fim não pode ser anterior à Data Início.";
+            return "Nova Data Fim não pode ser anterior à Nova Data Início.";
         }
     }
 
@@ -2009,10 +2009,34 @@ export function ContratosDataTable() {
                                                                                         />
                                                                                     </div>
 
-                                                                                    {/* Data Início * (Prazo ou Misto) */}
+                                                                                    {/* Data Publicação * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
+                                                                                        <Input
+                                                                                            type="date"
+                                                                                            className="h-8 text-xs"
+                                                                                            value={novoAditivo[c.id]?.data_publicacao ?? ""}
+                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_publicacao: e.target.value || null } }))}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* PAE * */}
+                                                                                    <div className="flex flex-col gap-1">
+                                                                                        <label className="text-xs font-medium text-gray-600">PAE *</label>
+                                                                                        <Input
+                                                                                            className="h-8 text-xs"
+                                                                                            placeholder="Ex: 2025/123456"
+                                                                                            value={novoAditivo[c.id]?.pae ?? ""}
+                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
+                                                                                        />
+                                                                                    </div>
+
+                                                                                    {/* --- LINHA DA NATUREZA DO TERMO ADITIVO --- */}
+
+                                                                                    {/* Nova Data Início * (Prazo ou Misto) */}
                                                                                     {(isPrazo || isMisto) && (
-                                                                                        <div className="flex flex-col gap-1">
-                                                                                            <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                        <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
+                                                                                            <label className="text-xs font-medium text-gray-600">Nova Data Início *</label>
                                                                                             <Input
                                                                                                 type="date"
                                                                                                 className="h-8 text-xs"
@@ -2036,7 +2060,7 @@ export function ContratosDataTable() {
 
                                                                                     {/* Nova Data Fim * (Prazo ou Misto) */}
                                                                                     {(isPrazo || isMisto) && (
-                                                                                        <div className="flex flex-col gap-1">
+                                                                                        <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                             <label className="text-xs font-medium text-gray-600">Nova Data Fim *</label>
                                                                                             <Input
                                                                                                 type="date"
@@ -2062,7 +2086,7 @@ export function ContratosDataTable() {
                                                                                     {/* Valor Acréscimo e Valor Supressão * (Valor ou Misto) */}
                                                                                     {(isValor || isMisto) && (
                                                                                         <>
-                                                                                            <div className="flex flex-col gap-1">
+                                                                                            <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                 <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                                                                                                 <Input
                                                                                                     type="number"
@@ -2085,7 +2109,7 @@ export function ContratosDataTable() {
                                                                                                     }}
                                                                                                 />
                                                                                             </div>
-                                                                                            <div className="flex flex-col gap-1">
+                                                                                            <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                 <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                                                                                                 <Input
                                                                                                     type="number"
@@ -2111,30 +2135,10 @@ export function ContratosDataTable() {
                                                                                         </>
                                                                                     )}
 
-                                                                                    {/* PAE * */}
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <label className="text-xs font-medium text-gray-600">PAE *</label>
-                                                                                        <Input
-                                                                                            className="h-8 text-xs"
-                                                                                            placeholder="Ex: 2025/123456"
-                                                                                            value={novoAditivo[c.id]?.pae ?? ""}
-                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
-                                                                                        />
-                                                                                    </div>
-
-                                                                                    {/* Data Publicação * */}
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
-                                                                                        <Input
-                                                                                            type="date"
-                                                                                            className="h-8 text-xs"
-                                                                                            value={novoAditivo[c.id]?.data_publicacao ?? ""}
-                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], data_publicacao: e.target.value || null } }))}
-                                                                                        />
-                                                                                    </div>
+                                                                                    {/* --- LINHA DE ARQUIVO E DESCRIÇÃO --- */}
 
                                                                                     {/* Arquivo do Termo Aditivo * */}
-                                                                                    <div className="flex flex-col gap-1">
+                                                                                    <div className="col-span-2 md:col-span-1 md:col-start-1 flex flex-col gap-1">
                                                                                         <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo *</label>
                                                                                         <label className={`flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed rounded text-xs transition-colors ${arquivoAditivo[c.id] ? "border-emerald-500 text-emerald-700 bg-emerald-50/50" : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"}`}>
                                                                                             <IconFileText className="w-4 h-4 shrink-0" />
@@ -2211,7 +2215,7 @@ export function ContratosDataTable() {
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700">Descrição</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Assinatura</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Publicação</th>
-                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Início</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Data Início</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Vigência</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Acréscimo</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Supressão</th>
@@ -2429,10 +2433,34 @@ export function ContratosDataTable() {
                                                                                                                      />
                                                                                                                  </div>
 
-                                                                                                                 {/* Data Início * (Prazo ou Misto) */}
+                                                                                                                 {/* Data Publicação * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
+                                                                                                                     <Input
+                                                                                                                         type="date"
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         value={editandoAditivo[ad.id]?.data_publicacao ?? ""}
+                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_publicacao: e.target.value || null } }))}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* PAE * */}
+                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                     <label className="text-xs font-medium text-gray-600">PAE *</label>
+                                                                                                                     <Input
+                                                                                                                         className="h-8 text-xs"
+                                                                                                                         placeholder="Ex: 2025/123456"
+                                                                                                                         value={editandoAditivo[ad.id]?.pae ?? ""}
+                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
+                                                                                                                     />
+                                                                                                                 </div>
+
+                                                                                                                 {/* --- LINHA DA NATUREZA DO TERMO ADITIVO --- */}
+
+                                                                                                                 {/* Nova Data Início * (Prazo ou Misto) */}
                                                                                                                  {(isPrazo || isMisto) && (
-                                                                                                                     <div className="flex flex-col gap-1">
-                                                                                                                         <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                                                     <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
+                                                                                                                         <label className="text-xs font-medium text-gray-600">Nova Data Início *</label>
                                                                                                                          <Input
                                                                                                                              type="date"
                                                                                                                              className="h-8 text-xs"
@@ -2456,7 +2484,7 @@ export function ContratosDataTable() {
 
                                                                                                                  {/* Nova Data Fim * (Prazo ou Misto) */}
                                                                                                                  {(isPrazo || isMisto) && (
-                                                                                                                     <div className="flex flex-col gap-1">
+                                                                                                                     <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                                          <label className="text-xs font-medium text-gray-600">Nova Data Fim *</label>
                                                                                                                          <Input
                                                                                                                              type="date"
@@ -2482,7 +2510,7 @@ export function ContratosDataTable() {
                                                                                                                  {/* Valor Acréscimo e Valor Supressão * (Valor ou Misto) */}
                                                                                                                  {(isValor || isMisto) && (
                                                                                                                      <>
-                                                                                                                         <div className="flex flex-col gap-1">
+                                                                                                                         <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                                              <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                                                                                                                              <Input
                                                                                                                                  type="number"
@@ -2505,7 +2533,7 @@ export function ContratosDataTable() {
                                                                                                                                  }}
                                                                                                                              />
                                                                                                                          </div>
-                                                                                                                         <div className="flex flex-col gap-1">
+                                                                                                                         <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                                              <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                                                                                                                              <Input
                                                                                                                                  type="number"
@@ -2531,30 +2559,10 @@ export function ContratosDataTable() {
                                                                                                                      </>
                                                                                                                  )}
 
-                                                                                                                 {/* PAE * */}
-                                                                                                                 <div className="flex flex-col gap-1">
-                                                                                                                     <label className="text-xs font-medium text-gray-600">PAE *</label>
-                                                                                                                     <Input
-                                                                                                                         className="h-8 text-xs"
-                                                                                                                         placeholder="Ex: 2025/123456"
-                                                                                                                         value={editandoAditivo[ad.id]?.pae ?? ""}
-                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
-                                                                                                                     />
-                                                                                                                 </div>
-
-                                                                                                                 {/* Data Publicação * */}
-                                                                                                                 <div className="flex flex-col gap-1">
-                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Publicação *</label>
-                                                                                                                     <Input
-                                                                                                                         type="date"
-                                                                                                                         className="h-8 text-xs"
-                                                                                                                         value={editandoAditivo[ad.id]?.data_publicacao ?? ""}
-                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], data_publicacao: e.target.value || null } }))}
-                                                                                                                     />
-                                                                                                                 </div>
+                                                                                                                 {/* --- LINHA DE ARQUIVO E DESCRIÇÃO --- */}
 
                                                                                                                  {/* Arquivo do Termo Aditivo * */}
-                                                                                                                 <div className="flex flex-col gap-1">
+                                                                                                                 <div className="col-span-2 md:col-span-1 md:col-start-1 flex flex-col gap-1">
                                                                                                                      <label className="text-xs font-medium text-gray-600">Arquivo do Termo Aditivo *</label>
                                                                                                                      <label className={`flex items-center gap-2 cursor-pointer h-8 px-2 border border-dashed rounded text-xs transition-colors ${arquivoEdicaoAditivo[ad.id] || ad.arquivo_id ? "border-emerald-500 text-emerald-700 bg-emerald-50/50" : "border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"}`}>
                                                                                                                          <IconFileText className="w-4 h-4 shrink-0" />
