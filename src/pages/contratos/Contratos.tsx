@@ -1161,7 +1161,7 @@ function validarCamposAditivo(
     const faltando: string[] = [];
     if (!dados.tipo) faltando.push("Termo Aditivo");
     if (!dados.data_assinatura) faltando.push("Data Assinatura");
-    if (!dados.data_inicio) faltando.push("Data Início");
+    if ((dados.tipo === "Prazo" || dados.tipo === "Misto") && !dados.data_inicio) faltando.push("Data Início");
     if (!dados.pae || !dados.pae.trim()) faltando.push("PAE");
     if (!dados.data_publicacao) faltando.push("Data Publicação");
     if (!arquivoPresente) faltando.push("Arquivo do Termo Aditivo");
@@ -1964,6 +1964,7 @@ export function ContratosDataTable() {
                                                                                                 const atualizado: Partial<TermoAditivoCreate> = {
                                                                                                     ...curr,
                                                                                                     tipo,
+                                                                                                    data_inicio: (tipo === "Prazo" || tipo === "Misto") ? curr.data_inicio : null,
                                                                                                     nova_data_fim: (tipo === "Prazo" || tipo === "Misto") ? curr.nova_data_fim : null,
                                                                                                     valor_acrescimo: (tipo === "Valor" || tipo === "Misto") ? curr.valor_acrescimo : null,
                                                                                                     valor_supressao: (tipo === "Valor" || tipo === "Misto") ? curr.valor_supressao : null,
@@ -1976,7 +1977,7 @@ export function ContratosDataTable() {
                                                                                             }}
                                                                                             value={tipoAtual ?? ""}
                                                                                         >
-                                                                                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                                                            <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                             <SelectContent>
                                                                                                 {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
                                                                                                     <SelectItem key={value} value={value} className="text-xs">{label}</SelectItem>
@@ -2008,28 +2009,30 @@ export function ContratosDataTable() {
                                                                                         />
                                                                                     </div>
 
-                                                                                    {/* Data Início * */}
-                                                                                    <div className="flex flex-col gap-1">
-                                                                                        <label className="text-xs font-medium text-gray-600">Data Início *</label>
-                                                                                        <Input
-                                                                                            type="date"
-                                                                                            className="h-8 text-xs"
-                                                                                            value={novoAditivo[c.id]?.data_inicio ?? ""}
-                                                                                            onChange={e => {
-                                                                                                const data_inicio = e.target.value || null;
-                                                                                                const curr = novoAditivo[c.id] ?? {};
-                                                                                                const manual = objetoManualNovo.has(c.id);
-                                                                                                setNovoAditivo(prev => ({
-                                                                                                    ...prev,
-                                                                                                    [c.id]: {
-                                                                                                        ...prev[c.id],
-                                                                                                        data_inicio,
-                                                                                                        objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
-                                                                                                    }
-                                                                                                }));
-                                                                                            }}
-                                                                                        />
-                                                                                    </div>
+                                                                                    {/* Data Início * (Prazo ou Misto) */}
+                                                                                    {(isPrazo || isMisto) && (
+                                                                                        <div className="flex flex-col gap-1">
+                                                                                            <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                            <Input
+                                                                                                type="date"
+                                                                                                className="h-8 text-xs"
+                                                                                                value={novoAditivo[c.id]?.data_inicio ?? ""}
+                                                                                                onChange={e => {
+                                                                                                    const data_inicio = e.target.value || null;
+                                                                                                    const curr = novoAditivo[c.id] ?? {};
+                                                                                                    const manual = objetoManualNovo.has(c.id);
+                                                                                                    setNovoAditivo(prev => ({
+                                                                                                        ...prev,
+                                                                                                        [c.id]: {
+                                                                                                            ...prev[c.id],
+                                                                                                            data_inicio,
+                                                                                                            objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
+                                                                                                        }
+                                                                                                    }));
+                                                                                                }}
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
 
                                                                                     {/* Nova Data Fim * (Prazo ou Misto) */}
                                                                                     {(isPrazo || isMisto) && (
@@ -2151,7 +2154,7 @@ export function ContratosDataTable() {
                                                                                     </div>
 
                                                                                     {/* Descrição do Termo Aditivo * */}
-                                                                                    <div className="col-span-2 md:col-span-4 flex flex-col gap-1">
+                                                                                    <div className="col-span-2 md:col-span-3 flex flex-col gap-1">
                                                                                         <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
                                                                                         <Input
                                                                                             className="h-8 text-xs"
@@ -2256,7 +2259,7 @@ export function ContratosDataTable() {
                                                                                                 <td className="px-3 py-2 text-gray-600">{formatDate(ad.data_assinatura)}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.data_publicacao ? formatDate(ad.data_publicacao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.data_inicio ? formatDate(ad.data_inicio) : "—"}</td>
-                                                                                                <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
+                                                                                                <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : (c.data_fim ? formatDate(c.data_fim) : "—")}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_supressao ? formatCurrency(ad.valor_supressao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-center">
@@ -2381,6 +2384,7 @@ export function ContratosDataTable() {
                                                                                                                              const atualizado: Partial<TermoAditivoUpdate> = {
                                                                                                                                  ...curr,
                                                                                                                                  tipo,
+                                                                                                                                 data_inicio: (tipo === "Prazo" || tipo === "Misto") ? curr.data_inicio : null,
                                                                                                                                  nova_data_fim: (tipo === "Prazo" || tipo === "Misto") ? curr.nova_data_fim : null,
                                                                                                                                  valor_acrescimo: (tipo === "Valor" || tipo === "Misto") ? curr.valor_acrescimo : null,
                                                                                                                                  valor_supressao: (tipo === "Valor" || tipo === "Misto") ? curr.valor_supressao : null,
@@ -2393,7 +2397,7 @@ export function ContratosDataTable() {
                                                                                                                          }}
                                                                                                                          value={tipoAtual ?? ""}
                                                                                                                      >
-                                                                                                                         <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                                                                                                         <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                                                                                                          <SelectContent>
                                                                                                                              {TIPOS_ADITIVO_OPTIONS.map(({ value, label }) => (
                                                                                                                                  <SelectItem key={value} value={value}>{label}</SelectItem>
@@ -2425,28 +2429,30 @@ export function ContratosDataTable() {
                                                                                                                      />
                                                                                                                  </div>
 
-                                                                                                                 {/* Data Início * */}
-                                                                                                                 <div className="flex flex-col gap-1">
-                                                                                                                     <label className="text-xs font-medium text-gray-600">Data Início *</label>
-                                                                                                                     <Input
-                                                                                                                         type="date"
-                                                                                                                         className="h-8 text-xs"
-                                                                                                                         value={editandoAditivo[ad.id]?.data_inicio ?? ""}
-                                                                                                                         onChange={e => {
-                                                                                                                             const data_inicio = e.target.value || null;
-                                                                                                                             const curr = editandoAditivo[ad.id] ?? {};
-                                                                                                                             const manual = objetoManualEdicao.has(ad.id);
-                                                                                                                             setEditandoAditivo(prev => ({
-                                                                                                                                 ...prev,
-                                                                                                                                 [ad.id]: {
-                                                                                                                                     ...prev[ad.id],
-                                                                                                                                     data_inicio,
-                                                                                                                                     objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
-                                                                                                                                 }
-                                                                                                                             }));
-                                                                                                                         }}
-                                                                                                                     />
-                                                                                                                 </div>
+                                                                                                                 {/* Data Início * (Prazo ou Misto) */}
+                                                                                                                 {(isPrazo || isMisto) && (
+                                                                                                                     <div className="flex flex-col gap-1">
+                                                                                                                         <label className="text-xs font-medium text-gray-600">Data Início *</label>
+                                                                                                                         <Input
+                                                                                                                             type="date"
+                                                                                                                             className="h-8 text-xs"
+                                                                                                                             value={editandoAditivo[ad.id]?.data_inicio ?? ""}
+                                                                                                                             onChange={e => {
+                                                                                                                                 const data_inicio = e.target.value || null;
+                                                                                                                                 const curr = editandoAditivo[ad.id] ?? {};
+                                                                                                                                 const manual = objetoManualEdicao.has(ad.id);
+                                                                                                                                 setEditandoAditivo(prev => ({
+                                                                                                                                     ...prev,
+                                                                                                                                     [ad.id]: {
+                                                                                                                                         ...prev[ad.id],
+                                                                                                                                         data_inicio,
+                                                                                                                                         objeto: manual ? curr.objeto : gerarDescricaoAditivo({ ...curr, data_inicio })
+                                                                                                                                     }
+                                                                                                                                 }));
+                                                                                                                             }}
+                                                                                                                         />
+                                                                                                                     </div>
+                                                                                                                 )}
 
                                                                                                                  {/* Nova Data Fim * (Prazo ou Misto) */}
                                                                                                                  {(isPrazo || isMisto) && (
@@ -2568,7 +2574,7 @@ export function ContratosDataTable() {
                                                                                                                  </div>
 
                                                                                                                  {/* Descrição do Termo Aditivo * */}
-                                                                                                                 <div className="col-span-2 md:col-span-4 flex flex-col gap-1">
+                                                                                                                 <div className="col-span-2 md:col-span-3 flex flex-col gap-1">
                                                                                                                      <label className="text-xs font-medium text-gray-600">Descrição do Termo Aditivo *</label>
                                                                                                                      <Input
                                                                                                                          className="h-8 text-xs"

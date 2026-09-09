@@ -31,7 +31,6 @@ import {
     deleteArquivoContrato,
     getContratados,
     getModalidades,
-    getStatus,
     getTermosContratuais,
 } from '@/lib/api';
 
@@ -231,7 +230,6 @@ export function EditarContrato() {
     // Estados para os dropdowns (inalterado)
     const [contratados, setContratados] = useState<any[]>([]);
     const [modalidades, setModalidades] = useState<any[]>([]);
-    const [statusList, setStatusList] = useState<any[]>([]);
     const [usuariosGestores, setUsuariosGestores] = useState<any[]>([]);
     const [usuariosFiscais, setUsuariosFiscais] = useState<any[]>([]);
 
@@ -264,17 +262,18 @@ export function EditarContrato() {
             setIsLoading(true);
             try {
                 // Carrega dados dos dropdowns e contrato em paralelo usando as funções da API
-                const [contratados, modalidades, statusList, termosCatalog, contractData] = await Promise.all([
+                const [contratados, modalidades, termosCatalog, contractData] = await Promise.all([
                     getContratados({ page: 1, per_page: 100 }),
                     getModalidades(),
-                    getStatus(),
-                    getTermosContratuais(),
+                    getTermosContratuais().catch((err) => {
+                        console.warn("Aviso ao carregar termos contratuais:", err);
+                        return [];
+                    }),
                     getContratoDetalhado(Number(id))
                 ]);
 
                 setContratados(contratados.data || contratados);
                 setModalidades(modalidades);
-                setStatusList(statusList);
                 setTermosContratuaisCatalog(termosCatalog.map((t) => ({ id: t.id, nome: t.nome })));
 
                 // Carregar usuários filtrados por perfil com limite maior
@@ -642,7 +641,10 @@ export function EditarContrato() {
     return (
         <div className="w-full mx-auto p-6">
             <h1 className="text-2xl font-bold mb-6 text-gray-800">Editar Contrato</h1>
-            <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-white shadow-md rounded-2xl p-6">
+            <form onSubmit={handleSubmit(onSubmit, (formErrors) => {
+                console.error("Erros de validação do formulário:", formErrors);
+                toast.error("Verifique os campos obrigatórios com erro antes de salvar.");
+            })} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 bg-white shadow-md rounded-2xl p-6">
 
                 {/* Campos ocultos para react-hook-form */}
                 <input {...register("contratado_id")} type="hidden" />
@@ -867,15 +869,27 @@ export function EditarContrato() {
                 <div>
                     <label className="font-medium">Status *</label>
                     <div className="mt-1">
-                        <SearchableSelect
-                            options={statusList}
+                        <select
                             value={selectedStatus}
-                            onValueChange={(value) => {
-                                setSelectedStatus(value);
-                                setValue("status_id", value, { shouldDirty: true });
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setSelectedStatus(val);
+                                setValue("status_id", val, { shouldDirty: true });
                             }}
-                            placeholder="Selecione um status"
-                        />
+                            className="w-full border rounded-lg p-2.5 text-sm bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 focus:outline-none"
+                        >
+                            {selectedStatus === "1" && (
+                                <option value="1">Ativo (Controlado pelo sistema)</option>
+                            )}
+                            {selectedStatus === "3" && (
+                                <option value="3">Encerrado (Controlado pelo sistema)</option>
+                            )}
+                            <option value="2">Suspenso</option>
+                            <option value="4">Cancelado</option>
+                            {(selectedStatus === "2" || selectedStatus === "4") && (
+                                <option value="1">Reativar / Ativo</option>
+                            )}
+                        </select>
                     </div>
                     {errors.status_id && <p className="text-red-500 text-sm">{errors.status_id.message}</p>}
                 </div>
