@@ -93,7 +93,7 @@ export function ProfileSelectionModal({ open, onProfileSelected }: ProfileSelect
           {perfisDisponiveis.map((perfil) => (
             <Card
               key={perfil.id}
-              className={`cursor-pointer transition-all hover:shadow-md ${
+              className={`cursor-pointer transition-shadow hover:shadow-md ${
                 selectedProfileId === perfil.id ? 'ring-2 ring-blue-500' : ''
               } ${isSelecting && selectedProfileId !== perfil.id ? 'opacity-50' : ''}`}
               onClick={() => handleProfileSelect(perfil.id)}
