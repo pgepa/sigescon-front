@@ -1,4 +1,4 @@
-# SIGESCON - Sistema de Gestão de Contratos
+# SIGESCON - Sistema de Gestão de Contratos (Frontend)
 
 ![Logo do Projeto](src/assets/logo.svg)
 
@@ -10,103 +10,121 @@
 
 ---
 
-##  sobre o projeto
+## 📖 Sobre o Projeto
 
-O **SIGESCON** (Sistema de Gestão de Contratos) é uma aplicação moderna desenvolvida para otimizar e centralizar a administração de contratos. Construído com as mais recentes tecnologias de front-end, o sistema oferece uma interface de usuário intuitiva e responsiva para gerenciar contratos, fornecedores, modalidades e usuários de forma eficiente.
-
-O dashboard principal fornece uma visão geral e interativa dos dados mais importantes, permitindo um acompanhamento rápido e eficaz do status dos contratos e outras métricas relevantes.
+O **SIGESCON** (Sistema de Gestão de Contratos) é uma aplicação moderna desenvolvida para a **Procuradoria-Geral do Estado do Pará (PGE-PA)** para otimizar, centralizar e fiscalizar a administração de contratos públicos. Construído com as tecnologias mais recentes do ecossistema React, o sistema oferece interface intuitiva, rápida e responsiva para gerenciar contratos, termos aditivos, relatórios fiscais, fornecedores e usuários.
 
 ---
 
 ## ✨ Funcionalidades
 
--   **Dashboard Interativo:** Gráficos e cartões informativos para uma visão rápida da situação dos contratos.
--   **Gestão de Contratos:** Crie, edite, visualize e remova contratos detalhados.
--   **Gerenciamento de Entidades:** Administração completa de Fornecedores (Contratados), Modalidades e Status.
--   **Controle de Acesso:** Sistema de autenticação e rotas privadas baseadas em perfis de usuário (Administrador, Gestor, Fiscal).
--   **Interface Responsiva:** Layout adaptável para uma ótima experiência em desktops e dispositivos móveis.
--   **Componentes Reutilizáveis:** Construído com base no `shadcn/ui` para uma UI consistente e de alta qualidade.
+- **Dashboard Interativo**: Indicadores visuais, contadores em tempo real e visão adaptada ao perfil logado (Admin, Gestor ou Fiscal).
+- **Gestão Completa de Contratos**: Cadastro com múltiplos campos, upload de documentos anexos, filtros dinâmicos e controle de histórico de vigência original (`data_inicio_original` e `data_fim_original`).
+- **Módulo de Termos Aditivos**:
+  - Cadastro e edição integrados via acordeão na própria listagem de contratos.
+  - Formulário com layout otimizado em 3 linhas:
+    - **Linha 1**: `Termo Aditivo *` (Tipo), `Data Assinatura *`, `Data Publicação *` e `PAE *`.
+    - **Linha 2**: Campos específicos da natureza (`Nova Data Início *`, `Nova Data Fim *`, `Valor Acréscimo (R$) *` e `Valor Supressão (R$) *`).
+    - **Linha 3**: Upload do arquivo do aditivo e campo de descrição automática/manual.
+  - Suporte a download do arquivo vinculado, inativação (soft delete) e exclusão definitiva.
+- **Relatório de Termos Aditivos**: Tela dedicada para busca avançada, filtros por natureza, status (`Ativo`, `Inativo`, `Vencido`) e contrato.
+- **Sistema de Múltiplos Perfis**: Suporte a múltiplos papéis por usuário com alternância instantânea de contexto (Admin, Gestor, Fiscal) diretamente no cabeçalho.
+- **Relatórios Fiscais e Pendências**: Acompanhamento de prazos, notificações automáticas e fluxo de análise/aprovação de relatórios.
+- **Administração de Entidades Auxiliares**: Gerenciamento de Fornecedores (Contratados), Modalidades, Status e Usuários.
+- **Interface Responsiva**: Construída com Tailwind CSS v4 e `shadcn/ui`, adaptável a desktops, tablets e smartphones.
 
 ---
 
 ## 🚀 Tecnologias Utilizadas
 
-Este projeto foi construído utilizando as seguintes tecnologias:
-
--   **React 19:** Biblioteca principal para a construção da interface de usuário.
--   **Vite:** Ferramenta de build extremamente rápida para desenvolvimento front-end.
--   **TypeScript:** Superset do JavaScript que adiciona tipagem estática.
--   **React Router DOM:** Para gerenciamento de rotas na aplicação.
--   **Tailwind CSS:** Framework CSS utility-first para estilização.
--   **shadcn/ui:** Coleção de componentes de UI reutilizáveis.
--   **Zod:** Para validação de schemas e formulários.
--   **React Hook Form:** Para gerenciamento de formulários.
--   **TanStack Table:** Para criação de tabelas e data grids poderosos.
--   **Recharts:** Para a criação de gráficos interativos.
--   **Lucide React:** Pacote de ícones.
+- **React 19**: Biblioteca principal para construção de interfaces.
+- **Vite**: Ferramenta de compilação ultrarrápida.
+- **TypeScript**: Tipagem estática rigorosa para segurança e manutenibilidade.
+- **React Router DOM**: Gerenciamento de rotas e histórico da aplicação.
+- **Tailwind CSS v4**: Estilização utility-first moderna e responsiva.
+- **shadcn/ui & Radix UI**: Componentes acessíveis e reutilizáveis.
+- **TanStack Table**: Manipulação avançada de tabelas, paginação e ordenação.
+- **Lucide React & Tabler Icons**: Conjunto moderno de ícones vetoriais.
 
 ---
 
-## ▶️ Começando
+## ▶️ Instalação e Execução
 
-Siga as instruções abaixo para configurar e rodar o projeto em seu ambiente local.
+Siga o passo a passo abaixo para rodar o frontend a partir de um clone limpo dos fontes.
 
 ### Pré-requisitos
+- **Node.js** (versão 18 ou superior)
+- **npm** (incluso com o Node.js) ou outro gerenciador de pacotes (`yarn`, `pnpm`)
 
-Você vai precisar ter o [Node.js](https://nodejs.org/) (versão 18 ou superior) e um gerenciador de pacotes ([npm](https://www.npmjs.com/), [yarn](https://yarnpkg.com/) ou [pnpm](https://pnpm.io/)) instalados.
-
-### Instalação
-
-1.  Clone o repositório:
-    ```bash
-    git clone [https://github.com/seu-usuario/sigescon.git](https://github.com/seu-usuario/sigescon.git)
-    ```
-2.  Navegue até o diretório do projeto:
-    ```bash
-    cd sigescon
-    ```
-3.  Instale as dependências:
-    ```bash
-    npm install
-    ```
-
-### Variáveis de Ambiente (produção / homologação)
-
-Copie `.env.example` para `.env` com as URLs que o **navegador** do usuário consegue acessar (sem barra no final). Rode `npm run build` — os valores entram no bundle.
-
-Em **servidor de testes só com HTTP**, pode usar `http://` no front **e** na API; não há bloqueio de conteúdo misto enquanto as duas forem HTTP.
-
-```env
-VITE_API_URL="http://seu-servidor:8000/api/v1"
-VITE_AUTH_API_URL="http://seu-servidor:8000/api/v1"
+### 1. Clonar o Repositório
+```bash
+git clone https://github.com/pgepa/sigescon-front.git
+cd sigescon-front
 ```
 
-Quando migrar para **HTTPS** no site, a API também deve ser HTTPS (ou servida no mesmo host via proxy); página HTTPS não pode chamar API só em HTTP.
+### 2. Instalar Dependências
+```bash
+npm install
+```
 
-- **`VITE_API_URL`**: base dos endpoints REST (`/usuarios`, `/contratos`, …).
-- **`VITE_AUTH_API_URL`**: base das rotas `/auth/*` (login, contexto, logout). Com o sigescon-fastapi atual, use em geral a **mesma** base terminando em `/api/v1`.
+### 3. Configurar Variáveis de Ambiente
+Crie o arquivo `.env` na raiz do projeto baseado no `.env.example`:
 
-### Rotas ao atualizar a página (F5) — Apache sem fallback
+```bash
+# Windows (PowerShell):
+Copy-Item .env.example .env
 
-Um **404 ao dar F5** em `/dashboard` vem do **Apache** (`GET /dashboard` antes de rodar React), não da tabela de rotas do React.
+# Linux / macOS:
+cp .env.example .env
+```
 
-Este projeto está com **`createHashRouter`**, então na prática você usa **`http://servidor/#/dashboard`**; o primeiro pedido ao servidor é sempre **`GET /`** e **F5** funciona mesmo sem **`.htaccess`**.
+Edite o arquivo `.env` informando a URL da API do backend:
 
-Para **URLs sem `#`** (`/dashboard`), troque em **`routes.tsx`** para **`createBrowserRouter`** e configure o servidor como abaixo.
+```env
+# Ambiente de Desenvolvimento Local:
+VITE_API_URL="http://localhost:8000/api/v1"
+VITE_AUTH_API_URL="http://localhost:8000/api/v1"
 
-### Deploy em Apache (URLs estilo `/dashboard` sem `#`)
+# Ambiente de Homologação / Produção:
+# VITE_API_URL="http://seu-servidor:8000/api/v1"
+# VITE_AUTH_API_URL="http://seu-servidor:8000/api/v1"
+```
 
-Nesse modo (**`createBrowserRouter`**), ao abrir **`/dashboard`** o Apache precisa entregar **`index.html`**.
+> **Nota**: As variáveis `VITE_*` são embutidas no código durante o build. Ao alterar o `.env`, reinicie o servidor de desenvolvimento ou execute um novo build.
 
-Após **`npm run build`**, copie o conteúdo de **`dist/`** (inclusive **`.htaccess`**, gerado a partir de `public/.htaccess`) para o diretório do site.
+### 4. Executar em Modo de Desenvolvimento
+```bash
+npm run dev
+```
+Acesse a aplicação no navegador em: `http://localhost:5173`.
 
-No **VirtualHost** ou **`Directory`**, garanta **`AllowOverride FileInfo`** (ou **`All`**) para o `.htaccess` valer — ou configure sem `.htaccess`:
+### 5. Compilação para Produção (Build)
+Para compilar o projeto para implantação em servidores de homologação ou produção:
+
+```bash
+npm run build
+```
+Os arquivos estáticos otimizados serão gerados no diretório `dist/`.
+
+---
+
+## 🌐 Implantação e Servidores Web (Apache / Nginx)
+
+Por padrão, a aplicação utiliza **`createHashRouter`**, o que permite navegação com URLs no formato `/#/dashboard` compatível com qualquer servidor estático sem necessidade de configuração especial de redirecionamento.
+
+### Implantação em Servidor Apache (sem `#` na URL):
+Caso o roteamento seja alterado para **`createBrowserRouter`**, configure o Apache para entregar o `index.html` em requisições diretas:
 
 ```apache
 <Directory "/var/www/sigescon">
-    AllowOverride None
+    AllowOverride All
     FallbackResource /index.html
 </Directory>
 ```
+Certifique-se de copiar o conteúdo gerado em `dist/` (incluindo o arquivo `.htaccess`) para a raiz do diretório web.
 
-Com **`mod_rewrite`** desabilitado use **`FallbackResource /index.html`** como acima (`mod_rewrite` não é obrigatório nesse modo).
+---
+
+## 📄 Licença
+
+Este projeto é desenvolvido para a **Procuradoria-Geral do Estado do Pará (PGE-PA)** sob licença MIT.
