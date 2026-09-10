@@ -2771,7 +2771,7 @@ export type TermoAditivo = {
     arquivo_id: number | null;
     arquivo_nome: string | null;
     ativo: boolean;
-    status?: "Ativo" | "Vencido" | "Inativo" | null;
+    status?: "Ativo" | "Vencido" | "Inativo" | "Aguardando Vigência" | null;
     created_at?: string;
     updated_at?: string;
 };
@@ -2947,7 +2947,7 @@ export type TermoAditivoRelatorioItem = {
     nr_contrato: string;
     contrato_objeto: string;
     contratado_nome: string | null;
-    status_calc: "Ativo" | "Vencido" | "Inativo";
+    status_calc: "Ativo" | "Vencido" | "Inativo" | "Aguardando Vigência";
 };
 
 export type TermoAditivoRelatorioPaginated = {

@@ -2231,17 +2231,22 @@ export function ContratosDataTable() {
                                                                                             const expiradoFallback = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
                                                                                             const inativoFallback = ad.ativo === false;
                                                                                             const inativo = ad.status ? ad.status === "Inativo" : inativoFallback;
-                                                                                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback);
+                                                                                            const aguardando = ad.status === "Aguardando Vigência";
+                                                                                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback && !aguardando);
                                                                                             const numeroExibido = idx + 1;
                                                                                             return (
                                                                                             <React.Fragment key={ad.id}>
-                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors opacity-70"}>
+                                                                                            <tr className={(vigente || aguardando) ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors opacity-70"}>
                                                                                                 <td className="px-3 py-2 font-bold text-indigo-700">
                                                                                                     <div className="flex items-center gap-1.5">
                                                                                                         <span>{numeroExibido}º</span>
                                                                                                         {inativo ? (
                                                                                                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 uppercase tracking-wide">
                                                                                                                 Inativo
+                                                                                                            </span>
+                                                                                                        ) : aguardando ? (
+                                                                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wide">
+                                                                                                                Aguardando Vigência
                                                                                                             </span>
                                                                                                         ) : vigente ? (
                                                                                                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 uppercase tracking-wide">
@@ -2255,7 +2260,7 @@ export function ContratosDataTable() {
                                                                                                     </div>
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2">
-                                                                                                    <Badge className={`text-xs px-1.5 py-0 border ${vigente ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                                                                                                    <Badge className={`text-xs px-1.5 py-0 border ${(vigente || aguardando) ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
                                                                                                         {ad.tipo}
                                                                                                     </Badge>
                                                                                                 </td>
@@ -2309,7 +2314,7 @@ export function ContratosDataTable() {
                                                                                                             >
                                                                                                                 <IconPencil className="h-3.5 w-3.5" />
                                                                                                             </button>
-                                                                                                            {vigente && <AlertDialog>
+                                                                                                            {(vigente || aguardando) && <AlertDialog>
                                                                                                                 <AlertDialogTrigger asChild>
                                                                                                                     <button
                                                                                                                         onClick={e => e.stopPropagation()}

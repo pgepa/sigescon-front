@@ -495,7 +495,7 @@ export function EditarContrato() {
                     data_upload: arquivo.created_at
                 })));
             } catch {}
-            navigate("/contratos");
+            navigate(`/contratos/${id}`);
             
         } catch (err: any) {
             console.error(err);
@@ -542,7 +542,7 @@ export function EditarContrato() {
                 description: "Deseja realmente sair e descartá-las?",
                 action: {
                     label: "Sair e Descartar",
-                    onClick: () => navigate('/contratos'),
+                    onClick: () => navigate(`/contratos/${id}`),
                 },
                 cancel: {
                     label: "Continuar Editando",
@@ -550,7 +550,7 @@ export function EditarContrato() {
                 }
             });
         } else {
-            navigate('/contratos');
+            navigate(`/contratos/${id}`);
         }
     };
     

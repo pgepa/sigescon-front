@@ -21,13 +21,15 @@ O **SIGESCON** (Sistema de Gestão de Contratos) é uma aplicação moderna dese
 - **Dashboard Interativo**: Indicadores visuais, contadores em tempo real e visão adaptada ao perfil logado (Admin, Gestor ou Fiscal).
 - **Gestão Completa de Contratos**: Cadastro com múltiplos campos, upload de documentos anexos, filtros dinâmicos e controle de histórico de vigência original (`data_inicio_original` e `data_fim_original`).
 - **Módulo de Termos Aditivos**:
-  - Cadastro e edição integrados via acordeão na própria listagem de contratos.
+  - Cadastro, edição e gerenciamento integrados tanto via acordeão na listagem de contratos (`/contratos`) quanto na aba dedicada da tela de visualização de contrato (`/contratos/:id`).
   - Formulário com layout otimizado em 3 linhas:
     - **Linha 1**: `Termo Aditivo *` (Tipo), `Data Assinatura *`, `Data Publicação *` e `PAE *`.
     - **Linha 2**: Campos específicos da natureza (`Nova Data Início *`, `Nova Data Fim *`, `Valor Acréscimo (R$) *` e `Valor Supressão (R$) *`).
     - **Linha 3**: Upload do arquivo do aditivo e campo de descrição automática/manual.
-  - Suporte a download do arquivo vinculado, inativação (soft delete) e exclusão definitiva.
-- **Relatório de Termos Aditivos**: Tela dedicada para busca avançada, filtros por natureza, status (`Ativo`, `Inativo`, `Vencido`) e contrato.
+  - Ações completas por aditivo: `Novo Aditivo`, `Editar`, `Inativar` (soft delete com confirmação), `Excluir definitivamente` (hard delete com confirmação), `Upload` e `Download` do arquivo anexo.
+  - Suporte visual aos status `Aguardando Vigência` (efeito prospectivo), `Ativo`, `Vencido` e `Inativo`.
+- **Relatório de Termos Aditivos**: Tela dedicada para busca avançada, filtros por natureza, status (`Ativo`, `Aguardando Vigência`, `Inativo`, `Vencido`) e contrato.
+- **Navegação Fluida de Contratos**: Ao salvar ou cancelar a edição de um contrato (`/contratos/editar/:id`), o usuário é redirecionado diretamente para os detalhes do próprio contrato (`/contratos/:id`).
 - **Sistema de Múltiplos Perfis**: Suporte a múltiplos papéis por usuário com alternância instantânea de contexto (Admin, Gestor, Fiscal) diretamente no cabeçalho.
 - **Relatórios Fiscais e Pendências**: Acompanhamento de prazos, notificações automáticas e fluxo de análise/aprovação de relatórios.
 - **Administração de Entidades Auxiliares**: Gerenciamento de Fornecedores (Contratados), Modalidades, Status e Usuários.
