@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import React from 'react';
 import { toast } from 'sonner';
 import { getContratados } from '@/lib/api';
+import { maskPae, maskNumeroContrato, maskMoney, unmaskMoney } from '@/lib/masks';
 
 // Schema de validação Zod ajustado para a nova API
 const contractSchema = z.object({
@@ -22,11 +23,19 @@ const contractSchema = z.object({
     fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
     valor_anual: z.string().optional().refine(
-        (val) => !val || val === "" || parseFloat(val) >= 0,
+        (val) => {
+            if (!val || val === "") return true;
+            const num = unmaskMoney(val);
+            return num != null && num >= 0;
+        },
         "Valor anual não pode ser negativo"
     ),
     valor_global: z.string().optional().refine(
-        (val) => !val || val === "" || parseFloat(val) >= 0,
+        (val) => {
+            if (!val || val === "") return true;
+            const num = unmaskMoney(val);
+            return num != null && num >= 0;
+        },
         "Valor global não pode ser negativo"
     ),
     base_legal: z.string().optional(),
@@ -719,8 +728,8 @@ export function NovoContrato() {
                         formData.append(key, value as string);
                     } else if (['valor_anual', 'valor_global'].includes(key)) {
                         // Converter para número se não estiver vazio
-                        const numValue = parseFloat(value as string);
-                        if (!isNaN(numValue)) {
+                        const numValue = unmaskMoney(value as string);
+                        if (numValue != null && !isNaN(numValue)) {
                             formData.append(key, numValue.toString());
                         }
                     } else {
@@ -921,8 +930,12 @@ export function NovoContrato() {
                     <label className="font-medium">Número do contrato *</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: PGE Nº 99/2025" 
-                        {...register("nr_contrato")} 
+                        placeholder="Ex: 99/2025" 
+                        {...register("nr_contrato", {
+                            onChange: (e) => {
+                                e.target.value = maskNumeroContrato(e.target.value);
+                            }
+                        })} 
                         className="mt-1 border rounded-lg p-2 w-full" 
                     />
                     {errors.nr_contrato && <p className="text-red-500 text-sm">{errors.nr_contrato.message}</p>}
@@ -933,8 +946,12 @@ export function NovoContrato() {
                     <label className="font-medium">PAE</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: PAE nº 2025/123456" 
-                        {...register("pae")} 
+                        placeholder="Ex: 2025/123456" 
+                        {...register("pae", {
+                            onChange: (e) => {
+                                e.target.value = maskPae(e.target.value);
+                            }
+                        })} 
                         className="mt-1 border rounded-lg p-2 w-full" 
                     />
                 </div>
@@ -1221,24 +1238,30 @@ export function NovoContrato() {
                 <div>
                     <label className="font-medium">Valor Anual</label>
                     <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        {...register("valor_anual")}
+                        type="text"
+                        placeholder="0,00"
+                        {...register("valor_anual", {
+                            onChange: (e) => {
+                                e.target.value = maskMoney(e.target.value);
+                            }
+                        })}
                         className="mt-1 border rounded-lg p-2 w-full"
                     />
+                    {errors.valor_anual && <p className="text-red-500 text-sm">{errors.valor_anual.message}</p>}
                 </div>
                 <div>
                     <label className="font-medium">Valor Global</label>
                     <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0.00"
-                        {...register("valor_global")}
+                        type="text"
+                        placeholder="0,00"
+                        {...register("valor_global", {
+                            onChange: (e) => {
+                                e.target.value = maskMoney(e.target.value);
+                            }
+                        })}
                         className="mt-1 border rounded-lg p-2 w-full"
                     />
+                    {errors.valor_global && <p className="text-red-500 text-sm">{errors.valor_global.message}</p>}
                 </div>
                 <div className="md:col-span-1 lg:col-span-2">
                     <label className="font-medium">Base Legal</label>

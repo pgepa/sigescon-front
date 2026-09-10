@@ -211,7 +211,8 @@ function ModalDetalhes({
                       <th className="text-left px-3 py-2 font-semibold text-indigo-700">Descrição</th>
                       <th className="text-left px-3 py-2 font-semibold text-indigo-700">Assinatura</th>
                       <th className="text-left px-3 py-2 font-semibold text-indigo-700">Publicação</th>
-                      <th className="text-left px-3 py-2 font-semibold text-indigo-700">Nova Vigência</th>
+                      <th className="text-left px-3 py-2 font-semibold text-indigo-700">Nova Data Início</th>
+                      <th className="text-left px-3 py-2 font-semibold text-indigo-700">Nova Data Fim</th>
                       <th className="text-center px-3 py-2 font-semibold text-indigo-700">Arquivo</th>
                     </tr>
                   </thead>
@@ -242,6 +243,7 @@ function ModalDetalhes({
                         <td className="px-3 py-2 max-w-[180px] truncate" title={ad.objeto}>{ad.objeto}</td>
                         <td className="px-3 py-2">{fmtData(ad.data_assinatura)}</td>
                         <td className="px-3 py-2">{fmtData(ad.data_publicacao)}</td>
+                        <td className="px-3 py-2">{fmtData(ad.data_inicio)}</td>
                         <td className="px-3 py-2">{fmtData(ad.nova_data_fim)}</td>
                         <td className="px-3 py-2 text-center">
                           {ad.arquivo_id ? (

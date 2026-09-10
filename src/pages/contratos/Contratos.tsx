@@ -67,6 +67,7 @@ import {
     type TermoAditivoCreate,
     type TermoAditivoUpdate,
 } from "@/lib/api";
+import { maskPae, maskMoney, unmaskMoney } from "@/lib/masks";
 
 import {
     AlertDialog,
@@ -1154,7 +1155,8 @@ function isDataValida(dataStr: string): boolean {
 // listando apenas o que de fato está faltando, ou null se estiver tudo certo.
 function validarCamposAditivo(
     dados: Partial<TermoAditivoCreate> | undefined,
-    arquivoPresente: boolean = true
+    arquivoPresente: boolean = true,
+    contrato?: ContratoList | null
 ): string | null {
     if (!dados) return "Preencha os campos do termo aditivo.";
 
@@ -1189,6 +1191,14 @@ function validarCamposAditivo(
         }
         if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
             return "Nova Data Fim não pode ser anterior à Nova Data Início.";
+        }
+        if (contrato) {
+            const origInicio = (contrato as any).data_inicio_original ?? (contrato as any).data_inicio;
+            const origFim = (contrato as any).data_fim_original ?? contrato.data_fim;
+            const adInicio = dados.data_inicio || origInicio;
+            if (origInicio && origFim && adInicio === origInicio && dados.nova_data_fim === origFim) {
+                return "O termo aditivo de vigência não pode ter as mesmas datas de início e fim da vigência original do contrato.";
+            }
         }
     }
 
@@ -1284,7 +1294,8 @@ export function ContratosDataTable() {
         e.stopPropagation();
         const dados = novoAditivo[contratoId];
         const arquivo = arquivoAditivo[contratoId];
-        const erroValidacao = validarCamposAditivo(dados, !!arquivo);
+        const contratoObj = contratos.find(x => x.id === contratoId);
+        const erroValidacao = validarCamposAditivo(dados, !!arquivo, contratoObj);
         if (erroValidacao) {
             toast.error(erroValidacao);
             return;
@@ -1410,7 +1421,8 @@ export function ContratosDataTable() {
         const dados = editandoAditivo[aditivoId];
         const aditivoExistente = (aditivosMap[contratoId] ?? []).find(a => a.id === aditivoId);
         const temArquivo = !!(arquivoEdicaoAditivo[aditivoId] || aditivoExistente?.arquivo_id);
-        const erroValidacao = validarCamposAditivo(dados, temArquivo);
+        const contratoObj = contratos.find(x => x.id === contratoId);
+        const erroValidacao = validarCamposAditivo(dados, temArquivo, contratoObj);
         if (erroValidacao) {
             toast.error(erroValidacao);
             return;
@@ -2027,7 +2039,7 @@ export function ContratosDataTable() {
                                                                                             className="h-8 text-xs"
                                                                                             placeholder="Ex: 2025/123456"
                                                                                             value={novoAditivo[c.id]?.pae ?? ""}
-                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: e.target.value || null } }))}
+                                                                                            onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: maskPae(e.target.value) || null } }))}
                                                                                         />
                                                                                     </div>
 
@@ -2089,12 +2101,12 @@ export function ContratosDataTable() {
                                                                                             <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                 <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                                                                                                 <Input
-                                                                                                    type="number"
+                                                                                                    type="text"
                                                                                                     className="h-8 text-xs"
                                                                                                     placeholder="0,00"
-                                                                                                    value={novoAditivo[c.id]?.valor_acrescimo ?? ""}
+                                                                                                    value={novoAditivo[c.id]?.valor_acrescimo != null ? maskMoney(novoAditivo[c.id]?.valor_acrescimo) : ""}
                                                                                                     onChange={e => {
-                                                                                                        const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                        const valor_acrescimo = unmaskMoney(maskMoney(e.target.value));
                                                                                                         const curr = novoAditivo[c.id] ?? {};
                                                                                                         const tipo = curr.tipo ?? "Valor";
                                                                                                         setNovoAditivo(prev => ({
@@ -2112,12 +2124,12 @@ export function ContratosDataTable() {
                                                                                             <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                 <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                                                                                                 <Input
-                                                                                                    type="number"
+                                                                                                    type="text"
                                                                                                     className="h-8 text-xs"
                                                                                                     placeholder="0,00"
-                                                                                                    value={novoAditivo[c.id]?.valor_supressao ?? ""}
+                                                                                                    value={novoAditivo[c.id]?.valor_supressao != null ? maskMoney(novoAditivo[c.id]?.valor_supressao) : ""}
                                                                                                     onChange={e => {
-                                                                                                        const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                        const valor_supressao = unmaskMoney(maskMoney(e.target.value));
                                                                                                         const curr = novoAditivo[c.id] ?? {};
                                                                                                         const tipo = curr.tipo ?? "Valor";
                                                                                                         setNovoAditivo(prev => ({
@@ -2216,7 +2228,7 @@ export function ContratosDataTable() {
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Assinatura</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Publicação</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Data Início</th>
-                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Vigência</th>
+                                                                                            <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-28">Nova Data Fim</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Acréscimo</th>
                                                                                             <th className="text-left px-3 py-2 font-semibold text-indigo-700 w-32">Supressão</th>
                                                                                             <th className="text-center px-3 py-2 font-semibold text-indigo-700 w-20">Arquivo</th>
@@ -2231,17 +2243,22 @@ export function ContratosDataTable() {
                                                                                             const expiradoFallback = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
                                                                                             const inativoFallback = ad.ativo === false;
                                                                                             const inativo = ad.status ? ad.status === "Inativo" : inativoFallback;
-                                                                                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback);
+                                                                                            const aguardando = ad.status === "Aguardando Vigência";
+                                                                                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback && !aguardando);
                                                                                             const numeroExibido = idx + 1;
                                                                                             return (
                                                                                             <React.Fragment key={ad.id}>
-                                                                                            <tr className={vigente ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors opacity-70"}>
+                                                                                            <tr className={(vigente || aguardando) ? "hover:bg-indigo-50/30 transition-colors" : "bg-gray-50 transition-colors opacity-70"}>
                                                                                                 <td className="px-3 py-2 font-bold text-indigo-700">
                                                                                                     <div className="flex items-center gap-1.5">
                                                                                                         <span>{numeroExibido}º</span>
                                                                                                         {inativo ? (
                                                                                                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 uppercase tracking-wide">
                                                                                                                 Inativo
+                                                                                                            </span>
+                                                                                                        ) : aguardando ? (
+                                                                                                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wide">
+                                                                                                                Aguardando Vigência
                                                                                                             </span>
                                                                                                         ) : vigente ? (
                                                                                                             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700 uppercase tracking-wide">
@@ -2255,7 +2272,7 @@ export function ContratosDataTable() {
                                                                                                     </div>
                                                                                                 </td>
                                                                                                 <td className="px-3 py-2">
-                                                                                                    <Badge className={`text-xs px-1.5 py-0 border ${vigente ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                                                                                                    <Badge className={`text-xs px-1.5 py-0 border ${(vigente || aguardando) ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
                                                                                                         {ad.tipo}
                                                                                                     </Badge>
                                                                                                 </td>
@@ -2263,7 +2280,7 @@ export function ContratosDataTable() {
                                                                                                 <td className="px-3 py-2 text-gray-600">{formatDate(ad.data_assinatura)}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.data_publicacao ? formatDate(ad.data_publicacao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.data_inicio ? formatDate(ad.data_inicio) : "—"}</td>
-                                                                                                <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : (c.data_fim ? formatDate(c.data_fim) : "—")}</td>
+                                                                                                <td className="px-3 py-2 text-gray-600">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-gray-600">{ad.valor_supressao ? formatCurrency(ad.valor_supressao) : "—"}</td>
                                                                                                 <td className="px-3 py-2 text-center">
@@ -2309,7 +2326,7 @@ export function ContratosDataTable() {
                                                                                                             >
                                                                                                                 <IconPencil className="h-3.5 w-3.5" />
                                                                                                             </button>
-                                                                                                            {vigente && <AlertDialog>
+                                                                                                            {(vigente || aguardando) && <AlertDialog>
                                                                                                                 <AlertDialogTrigger asChild>
                                                                                                                     <button
                                                                                                                         onClick={e => e.stopPropagation()}
@@ -2451,7 +2468,7 @@ export function ContratosDataTable() {
                                                                                                                          className="h-8 text-xs"
                                                                                                                          placeholder="Ex: 2025/123456"
                                                                                                                          value={editandoAditivo[ad.id]?.pae ?? ""}
-                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
+                                                                                                                         onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: maskPae(e.target.value) || null } }))}
                                                                                                                      />
                                                                                                                  </div>
 
@@ -2513,12 +2530,12 @@ export function ContratosDataTable() {
                                                                                                                          <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                                              <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                                                                                                                              <Input
-                                                                                                                                 type="number"
+                                                                                                                                 type="text"
                                                                                                                                  className="h-8 text-xs"
                                                                                                                                  placeholder="0,00"
-                                                                                                                                 value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
+                                                                                                                                 value={editandoAditivo[ad.id]?.valor_acrescimo != null ? maskMoney(editandoAditivo[ad.id]?.valor_acrescimo) : ""}
                                                                                                                                  onChange={e => {
-                                                                                                                                     const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                                     const valor_acrescimo = unmaskMoney(maskMoney(e.target.value));
                                                                                                                                      const curr = editandoAditivo[ad.id] ?? {};
                                                                                                                                      const tipo = curr.tipo ?? "Valor";
                                                                                                                                      setEditandoAditivo(prev => ({
@@ -2536,12 +2553,12 @@ export function ContratosDataTable() {
                                                                                                                          <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                                                                                              <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                                                                                                                              <Input
-                                                                                                                                 type="number"
+                                                                                                                                 type="text"
                                                                                                                                  className="h-8 text-xs"
                                                                                                                                  placeholder="0,00"
-                                                                                                                                 value={editandoAditivo[ad.id]?.valor_supressao ?? ""}
+                                                                                                                                 value={editandoAditivo[ad.id]?.valor_supressao != null ? maskMoney(editandoAditivo[ad.id]?.valor_supressao) : ""}
                                                                                                                                  onChange={e => {
-                                                                                                                                     const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                                                                                                     const valor_supressao = unmaskMoney(maskMoney(e.target.value));
                                                                                                                                      const curr = editandoAditivo[ad.id] ?? {};
                                                                                                                                      const tipo = curr.tipo ?? "Valor";
                                                                                                                                      setEditandoAditivo(prev => ({
