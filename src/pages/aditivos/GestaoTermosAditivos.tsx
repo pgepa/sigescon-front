@@ -267,7 +267,7 @@ export default function GestaoTermosAditivos() {
                     <th className="px-4 py-3 font-medium text-gray-700">Tipo</th>
                     <th className="px-4 py-3 font-medium text-gray-700">Descrição</th>
                     <th className="px-4 py-3 font-medium text-gray-700">Assinatura</th>
-                    <th className="px-4 py-3 font-medium text-gray-700">Nova Vigência</th>
+                    <th className="px-4 py-3 font-medium text-gray-700">Nova Data Fim</th>
                     <th className="px-4 py-3 font-medium text-gray-700 text-right">Acréscimo</th>
                     <th className="px-4 py-3 font-medium text-gray-700 text-right">Supressão</th>
                     <th className="px-4 py-3 font-medium text-gray-700">Status</th>

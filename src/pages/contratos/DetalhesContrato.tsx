@@ -53,6 +53,7 @@ import {
   type TermoAditivoCreate,
   type TermoAditivoUpdate
 } from "@/lib/api";
+import { maskPae, maskMoney, unmaskMoney } from "@/lib/masks";
 import { toast } from "sonner";
 import { ContratoArquivos } from "@/components/ContratoArquivos";
 
@@ -111,7 +112,8 @@ function isDataValida(dataStr: string): boolean {
 
 function validarCamposAditivo(
   dados: Partial<TermoAditivoCreate> | undefined,
-  arquivoPresente: boolean = true
+  arquivoPresente: boolean = true,
+  contrato?: ContratoDetalhado | null
 ): string | null {
   if (!dados) return "Preencha os campos do termo aditivo.";
 
@@ -146,6 +148,14 @@ function validarCamposAditivo(
     }
     if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
       return "Nova Data Fim não pode ser anterior à Nova Data Início.";
+    }
+    if (contrato) {
+      const origInicio = contrato.data_inicio_original ?? contrato.data_inicio;
+      const origFim = contrato.data_fim_original ?? contrato.data_fim;
+      const adInicio = dados.data_inicio || origInicio;
+      if (origInicio && origFim && adInicio === origInicio && dados.nova_data_fim === origFim) {
+        return "O termo aditivo de vigência não pode ter as mesmas datas de início e fim da vigência original do contrato.";
+      }
     }
   }
 
@@ -333,7 +343,7 @@ export default function DetalhesContrato() {
   const handleSalvarAditivo = async () => {
     if (!id) return;
     const contratoId = parseInt(id);
-    const erroValidacao = validarCamposAditivo(novoAditivo, !!arquivoAditivo);
+    const erroValidacao = validarCamposAditivo(novoAditivo, !!arquivoAditivo, contrato);
     if (erroValidacao) {
       toast.error(erroValidacao);
       return;
@@ -453,7 +463,7 @@ export default function DetalhesContrato() {
     const dados = editandoAditivo[aditivoId];
     const aditivoExistente = aditivos.find(a => a.id === aditivoId);
     const temArquivo = !!(arquivoEdicaoAditivo[aditivoId] || aditivoExistente?.arquivo_id);
-    const erroValidacao = validarCamposAditivo(dados, temArquivo);
+    const erroValidacao = validarCamposAditivo(dados, temArquivo, contrato);
     if (erroValidacao) {
       toast.error(erroValidacao);
       return;
@@ -526,6 +536,13 @@ export default function DetalhesContrato() {
     );
   }
 
+  const aditivoPrazoAtivo = aditivos.find(
+    a => a.status === "Ativo" && (a.tipo === "Prazo" || a.tipo === "Misto") && a.ativo !== false
+  );
+  const vigenciaAtual = aditivoPrazoAtivo
+    ? `${formatDate(contrato.data_inicio)} — ${formatDate(contrato.data_fim)}`
+    : "—";
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -544,9 +561,9 @@ export default function DetalhesContrato() {
             <h1 className="text-3xl font-bold text-gray-800">Contrato {contrato.nr_contrato}</h1>
             <p className="text-gray-600 mt-1">{contrato.objeto}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Badge className={`${getStatusColor(contrato.status_nome || '')} text-white`}>
-              {contrato.status_nome}
+              {contrato.status_nome || 'Status Indefinido'}
             </Badge>
             {podeEditar && (
               <Button onClick={() => navigate(`/contratos/editar/${contrato.id}`)}>
@@ -563,7 +580,7 @@ export default function DetalhesContrato() {
         <Card>
           <CardContent className="py-4 px-5">
             {/* Linha 1: dados principais */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-3 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-3 text-sm">
               <div>
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Contratado</p>
                 <p className="font-semibold text-gray-800 mt-0.5">{contrato.contratado_nome || "—"}</p>
@@ -575,7 +592,13 @@ export default function DetalhesContrato() {
               <div>
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência Original</p>
                 <p className="font-semibold text-gray-800 mt-0.5">
-                  {formatDate(contrato.data_inicio)} → {formatDate(contrato.data_fim_original ?? contrato.data_fim)}
+                  {formatDate(contrato.data_inicio_original ?? contrato.data_inicio)} — {formatDate(contrato.data_fim_original ?? contrato.data_fim)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência Atual</p>
+                <p className="font-semibold text-gray-800 mt-0.5">
+                  {vigenciaAtual}
                 </p>
               </div>
               <div>
@@ -867,7 +890,7 @@ export default function DetalhesContrato() {
                           className="h-8 text-xs"
                           placeholder="Ex: 2025/123456"
                           value={novoAditivo.pae ?? ""}
-                          onChange={e => setNovoAditivo({ ...novoAditivo, pae: e.target.value || null })}
+                          onChange={e => setNovoAditivo({ ...novoAditivo, pae: maskPae(e.target.value) || null })}
                         />
                       </div>
 
@@ -923,12 +946,12 @@ export default function DetalhesContrato() {
                           <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                             <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                             <Input
-                              type="number"
+                              type="text"
                               className="h-8 text-xs"
                               placeholder="0,00"
-                              value={novoAditivo.valor_acrescimo ?? ""}
+                              value={novoAditivo.valor_acrescimo != null ? maskMoney(novoAditivo.valor_acrescimo) : ""}
                               onChange={e => {
-                                const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                const valor_acrescimo = unmaskMoney(maskMoney(e.target.value));
                                 const curr = novoAditivo;
                                 const tipo = curr.tipo ?? "Valor";
                                 setNovoAditivo({
@@ -943,12 +966,12 @@ export default function DetalhesContrato() {
                           <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                             <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                             <Input
-                              type="number"
+                              type="text"
                               className="h-8 text-xs"
                               placeholder="0,00"
-                              value={novoAditivo.valor_supressao ?? ""}
+                              value={novoAditivo.valor_supressao != null ? maskMoney(novoAditivo.valor_supressao) : ""}
                               onChange={e => {
-                                const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                const valor_supressao = unmaskMoney(maskMoney(e.target.value));
                                 const curr = novoAditivo;
                                 const tipo = curr.tipo ?? "Valor";
                                 setNovoAditivo({
@@ -1042,7 +1065,7 @@ export default function DetalhesContrato() {
                           <th className="text-left px-3 py-2 font-semibold text-gray-700">Assinatura</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-700">Publicação</th>
                           <th className="text-left px-3 py-2 font-semibold text-gray-700">Nova Data Início</th>
-                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Nova Vigência</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-700">Nova Data Fim</th>
                           <th className="text-right px-3 py-2 font-semibold text-gray-700">Acréscimo</th>
                           <th className="text-right px-3 py-2 font-semibold text-gray-700">Supressão</th>
                           <th className="text-center px-3 py-2 font-semibold text-gray-700">Arquivo</th>
@@ -1087,7 +1110,7 @@ export default function DetalhesContrato() {
                                   <td className="px-3 py-2 whitespace-nowrap">{formatDate(ad.data_assinatura)}</td>
                                   <td className="px-3 py-2 whitespace-nowrap">{ad.data_publicacao ? formatDate(ad.data_publicacao) : "—"}</td>
                                   <td className="px-3 py-2 whitespace-nowrap">{ad.data_inicio ? formatDate(ad.data_inicio) : "—"}</td>
-                                  <td className="px-3 py-2 whitespace-nowrap">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : (contrato?.data_fim ? formatDate(contrato.data_fim) : "—")}</td>
+                                  <td className="px-3 py-2 whitespace-nowrap">{ad.nova_data_fim ? formatDate(ad.nova_data_fim) : "—"}</td>
                                   <td className="px-3 py-2 text-right whitespace-nowrap">{ad.valor_acrescimo ? formatCurrency(ad.valor_acrescimo) : "—"}</td>
                                   <td className="px-3 py-2 text-right whitespace-nowrap">{ad.valor_supressao ? formatCurrency(ad.valor_supressao) : "—"}</td>
                                   <td className="px-3 py-2 text-center">
@@ -1280,7 +1303,7 @@ export default function DetalhesContrato() {
                                               className="h-8 text-xs"
                                               placeholder="Ex: 2025/123456"
                                               value={editandoAditivo[ad.id]?.pae ?? ""}
-                                              onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: e.target.value || null } }))}
+                                              onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: maskPae(e.target.value) || null } }))}
                                             />
                                           </div>
 
@@ -1342,12 +1365,12 @@ export default function DetalhesContrato() {
                                               <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                 <label className="text-xs font-medium text-gray-600">Valor Acréscimo (R$) *</label>
                                                 <Input
-                                                  type="number"
+                                                  type="text"
                                                   className="h-8 text-xs"
                                                   placeholder="0,00"
-                                                  value={editandoAditivo[ad.id]?.valor_acrescimo ?? ""}
+                                                  value={editandoAditivo[ad.id]?.valor_acrescimo != null ? maskMoney(editandoAditivo[ad.id]?.valor_acrescimo) : ""}
                                                   onChange={e => {
-                                                    const valor_acrescimo = e.target.value ? parseFloat(e.target.value) : null;
+                                                    const valor_acrescimo = unmaskMoney(maskMoney(e.target.value));
                                                     const curr = editandoAditivo[ad.id] ?? {};
                                                     const tipo = curr.tipo ?? "Valor";
                                                     setEditandoAditivo(prev => ({
@@ -1365,12 +1388,12 @@ export default function DetalhesContrato() {
                                               <div className={`flex flex-col gap-1 ${isMisto ? "col-span-1 md:col-span-1" : "col-span-1 md:col-span-2"}`}>
                                                 <label className="text-xs font-medium text-gray-600">Valor Supressão (R$) *</label>
                                                 <Input
-                                                  type="number"
+                                                  type="text"
                                                   className="h-8 text-xs"
                                                   placeholder="0,00"
-                                                  value={editandoAditivo[ad.id]?.valor_supressao ?? ""}
+                                                  value={editandoAditivo[ad.id]?.valor_supressao != null ? maskMoney(editandoAditivo[ad.id]?.valor_supressao) : ""}
                                                   onChange={e => {
-                                                    const valor_supressao = e.target.value ? parseFloat(e.target.value) : null;
+                                                    const valor_supressao = unmaskMoney(maskMoney(e.target.value));
                                                     const curr = editandoAditivo[ad.id] ?? {};
                                                     const tipo = curr.tipo ?? "Valor";
                                                     setEditandoAditivo(prev => ({
