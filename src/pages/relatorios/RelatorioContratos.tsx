@@ -352,6 +352,9 @@ export default function RelatorioContratos() {
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
+  const [sorting, setSorting] = useState<Array<{ id: string; desc: boolean }>>([
+    { id: "data_fim", desc: true },
+  ]);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -376,6 +379,55 @@ export default function RelatorioContratos() {
     publicGetModalidades().then(setModalidadesList).catch(() => {});
   }, []);
 
+  const toggleSort = useCallback((columnId: string) => {
+    setSorting((prev) => {
+      const current = prev[0];
+      if (!current || current.id !== columnId) {
+        return [{ id: columnId, desc: false }];
+      }
+      return [{ id: columnId, desc: !current.desc }];
+    });
+  }, []);
+
+  const getSortIndicator = useCallback((columnId: string) => {
+    const current = sorting.find((item) => item.id === columnId);
+    if (!current) return "↕";
+    return current.desc ? "↓" : "↑";
+  }, [sorting]);
+
+  const sortContratos = useCallback((items: Contrato[], currentSort?: { id: string; desc: boolean }) => {
+    if (!currentSort) return items;
+
+    const direction = currentSort.desc ? -1 : 1;
+
+    return [...items].sort((a, b) => {
+      const getValue = (item: Contrato, field: string) => {
+        switch (field) {
+          case "nr_contrato": return item.nr_contrato ?? "";
+          case "valor_global": return Number(item.valor_global ?? 0);
+          case "data_inicio": return item.data_inicio ? new Date(item.data_inicio + "T00:00:00").getTime() : 0;
+          case "data_fim": return item.data_fim ? new Date(item.data_fim + "T00:00:00").getTime() : 0;
+          case "contratado_nome": return item.contratado_nome ?? "";
+          case "modalidade_nome": return item.modalidade_nome ?? "";
+          case "status_nome": return item.status_nome ?? "";
+          case "fiscal_nome": return item.fiscal_nome ?? "";
+          case "fiscal_substituto_nome": return item.fiscal_substituto_nome ?? "";
+          case "base_legal": return item.base_legal ?? "";
+          default: return "";
+        }
+      };
+
+      const av = getValue(a, currentSort.id);
+      const bv = getValue(b, currentSort.id);
+
+      if (typeof av === "number" && typeof bv === "number") {
+        return (av - bv) * direction;
+      }
+
+      return String(av).localeCompare(String(bv), "pt-BR", { numeric: true }) * direction;
+    });
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -386,6 +438,11 @@ export default function RelatorioContratos() {
       if (modalidadeId) filters.modalidade_id = modalidadeId;
       if (dataInicio) filters.data_inicio = dataInicio;
       if (dataFim) filters.data_fim = dataFim;
+      if (sorting.length > 0) {
+        const currentSort = sorting[0];
+        filters.sort_by = currentSort.id;
+        filters.sort_order = currentSort.desc ? "desc" : "asc";
+      }
       const r = await publicGetContratos(filters);
       setTotalItems(r.total_items);
       setTotalPages(r.total_pages);
@@ -393,13 +450,13 @@ export default function RelatorioContratos() {
       const detalhados = await Promise.all(
         r.data.map(c => publicGetContratoDetalhado(c.id).catch(() => c))
       );
-      setContratos(detalhados);
+      setContratos(sortContratos(detalhados, sorting[0]));
     } catch {
       toast.error("Erro ao carregar contratos");
     } finally {
       setLoading(false);
     }
-  }, [page, perPage, search, statusId, contratadoId, modalidadeId, dataInicio, dataFim]);
+  }, [page, perPage, search, statusId, contratadoId, modalidadeId, dataInicio, dataFim, sorting, sortContratos]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -571,13 +628,36 @@ export default function RelatorioContratos() {
             <table ref={tableRef} className="w-full text-[11px] border-collapse">
               <thead>
                 <tr className="bg-gray-100 border-b border-gray-300">
-                  {["#", "Nº Contrato", "Fiscal / Suplente", "Fund. Legal",
-                    "Contratado", "Objeto", "Valor Global", "Modalidade",
-                    "Início", "Fim", "Situação", "Ações"
-                  ].map(h => (
-                    <th key={h}
-                      className="text-left px-2 py-1.5 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 last:border-r-0">
-                      {h}
+                  {[
+                    { id: "#", label: "#", sortable: false },
+                    { id: "nr_contrato", label: "Nº Contrato", sortable: true },
+                    { id: "fiscal_nome", label: "Fiscal / Suplente", sortable: true },
+                    { id: "base_legal", label: "Fund. Legal", sortable: true },
+                    { id: "contratado_nome", label: "Contratado", sortable: true },
+                    { id: "objeto", label: "Objeto", sortable: false },
+                    { id: "valor_global", label: "Valor Global", sortable: true },
+                    { id: "modalidade_nome", label: "Modalidade", sortable: true },
+                    { id: "data_inicio", label: "Início", sortable: true },
+                    { id: "data_fim", label: "Fim", sortable: true },
+                    { id: "status_nome", label: "Situação", sortable: true },
+                    { id: "acoes", label: "Ações", sortable: false },
+                  ].map(({ id, label, sortable }) => (
+                    <th
+                      key={id}
+                      className="text-left px-2 py-1.5 font-semibold text-gray-700 whitespace-nowrap border-r border-gray-200 last:border-r-0"
+                    >
+                      {sortable ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleSort(id)}
+                          className="flex items-center gap-1 text-left hover:text-blue-700 transition-colors"
+                        >
+                          <span>{label}</span>
+                          <span className="text-[10px] text-gray-500">{getSortIndicator(id)}</span>
+                        </button>
+                      ) : (
+                        label
+                      )}
                     </th>
                   ))}
                 </tr>
