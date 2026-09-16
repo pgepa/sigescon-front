@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Save, SquareX, Upload, Trash2, ChevronDown, Search, X } from "lucide-react";
+import { Save, SquareX, Upload, Trash2, ChevronDown, Search, X, AlertTriangle, Lock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -71,7 +71,37 @@ const contractSchema = z.object({
     garantia: z.string().optional(),
     portaria_fiscal: z.string().optional(),
     nr_adesao_ata: z.string().optional(),
-});
+}).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        return data.data_fim >= data.data_inicio;
+    },
+    {
+        message: "A data de fim da vigência não pode ser anterior à data de início",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        const ini = new Date(data.data_inicio);
+        const fim = new Date(data.data_fim);
+        const diffAnos = (fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        return diffAnos <= 10;
+    },
+    {
+        message: "A vigência contratual não pode ser superior a 10 anos (Arts. 105, 106 e 110 da Lei 14.133/2021)",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_doe || !data.data_fim) return true;
+        return data.data_doe <= data.data_fim;
+    },
+    {
+        message: "A data de publicação no DOE não pode ser posterior à data de término do contrato",
+        path: ["data_doe"],
+    }
+);
 
 type ContractFormData = z.infer<typeof contractSchema>;
 
@@ -88,9 +118,10 @@ interface SearchableSelectProps {
     // Rótulo do item atualmente selecionado, usado como fallback quando ele não está
     // presente em `options` (ex.: após uma busca que não o retornou).
     selectedLabel?: string;
+    disabled?: boolean;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder, onSearch, selectedLabel }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, onSearch, selectedLabel, disabled }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
@@ -150,13 +181,18 @@ function SearchableSelect({ options, value, onValueChange, placeholder, onSearch
             {/* Display button */}
             <button
                 type="button"
-                onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between px-3 py-2 text-left bg-white border border-blue-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors hover:border-blue-400"
+                disabled={disabled}
+                onClick={() => !disabled && setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between px-3 py-2 text-left rounded-lg transition-colors ${
+                    disabled
+                        ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed'
+                        : 'bg-white border border-blue-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 hover:border-blue-400'
+                }`}
             >
-                <span className={`block truncate ${!displayLabel ? 'text-gray-500' : 'text-blue-900'}`}>
+                <span className={`block truncate ${!displayLabel ? 'text-gray-500' : disabled ? 'text-gray-500' : 'text-blue-900'}`}>
                     {displayLabel ?? placeholder}
                 </span>
-                <ChevronDown className={`h-4 w-4 text-blue-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`h-4 w-4 ${disabled ? 'text-gray-400' : 'text-blue-600'} transition-transform ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {/* Dropdown */}
@@ -256,15 +292,86 @@ export function EditarContrato() {
     const [termosContratuaisCatalog, setTermosContratuaisCatalog] = useState<Array<{ id: number; nome: string }>>([]);
     const [selectedTermoContratual, setSelectedTermoContratual] = useState("");
 
+    const [rawContract, setRawContract] = useState<any>(null);
+    const [justificativa, setJustificativa] = useState("");
+
     const {
         register,
         handleSubmit,
         setValue,
+        watch,
         formState: { errors, dirtyFields, isDirty },
         reset,
     } = useForm<ContractFormData>({
         resolver: zodResolver(contractSchema),
     });
+
+    // Regras de Governança (Lei 14.133/2021)
+    const totalAditivos = rawContract?.total_aditivos ?? 0;
+    const hasAditivos = totalAditivos > 0;
+    const isEncerrado = rawContract?.status_nome === 'Encerrado';
+    const isVigenciaOriginalExpirada = Boolean(
+        rawContract?.data_fim_original &&
+        new Date(rawContract.data_fim_original + "T00:00:00").getTime() < new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+    );
+    const isCamposSensiveisBloqueados = Boolean(rawContract && (hasAditivos || isEncerrado || isVigenciaOriginalExpirada));
+
+    const motivoBloqueio = hasAditivos
+        ? `possui ${totalAditivos} termo(s) aditivo(s) cadastrado(s)`
+        : isEncerrado
+        ? 'está com status "Encerrado"'
+        : 'teve sua vigência original expirada';
+
+    // Observar campos sensíveis para exigir justificativa quando não bloqueados
+    const watchedNrContrato = watch("nr_contrato");
+    const watchedObjeto = watch("objeto");
+    const watchedDataInicio = watch("data_inicio");
+    const watchedDataFim = watch("data_fim");
+    const watchedContratadoId = watch("contratado_id");
+    const watchedModalidadeId = watch("modalidade_id");
+    const watchedValorAnual = watch("valor_anual");
+    const watchedValorGlobal = watch("valor_global");
+
+    const hasSensitiveChanges = React.useMemo(() => {
+        if (!rawContract || isCamposSensiveisBloqueados) return false;
+
+        const origNr = rawContract.nr_contrato ? maskNumeroContrato(rawContract.nr_contrato) : "";
+        if (watchedNrContrato && watchedNrContrato !== origNr) return true;
+
+        const origObjeto = rawContract.objeto ?? "";
+        if (watchedObjeto && watchedObjeto.trim() !== origObjeto.trim()) return true;
+
+        const origInicio = rawContract.data_inicio ? new Date(rawContract.data_inicio).toISOString().split('T')[0] : "";
+        if (watchedDataInicio && watchedDataInicio !== origInicio) return true;
+
+        const origFim = rawContract.data_fim ? new Date(rawContract.data_fim).toISOString().split('T')[0] : "";
+        if (watchedDataFim && watchedDataFim !== origFim) return true;
+
+        const origContratado = String(rawContract.contratado_id ?? "");
+        if (watchedContratadoId && watchedContratadoId !== origContratado) return true;
+
+        const origModalidade = String(rawContract.modalidade_id ?? "");
+        if (watchedModalidadeId && watchedModalidadeId !== origModalidade) return true;
+
+        const origValorAnual = rawContract.valor_anual != null ? maskMoney(rawContract.valor_anual) : "";
+        if (watchedValorAnual !== undefined && watchedValorAnual !== origValorAnual) return true;
+
+        const origValorGlobal = rawContract.valor_global != null ? maskMoney(rawContract.valor_global) : "";
+        if (watchedValorGlobal !== undefined && watchedValorGlobal !== origValorGlobal) return true;
+
+        return false;
+    }, [
+        rawContract,
+        isCamposSensiveisBloqueados,
+        watchedNrContrato,
+        watchedObjeto,
+        watchedDataInicio,
+        watchedDataFim,
+        watchedContratadoId,
+        watchedModalidadeId,
+        watchedValorAnual,
+        watchedValorGlobal,
+    ]);
 
     useEffect(() => {
         async function loadContractData() {
@@ -281,6 +388,7 @@ export function EditarContrato() {
                     getContratoDetalhado(Number(id))
                 ]);
 
+                setRawContract(contractData);
                 setContratados(contratados.data || contratados);
                 setModalidades(modalidades);
                 setTermosContratuaisCatalog(termosCatalog.map((t) => ({ id: t.id, nome: t.nome })));
@@ -404,10 +512,30 @@ export function EditarContrato() {
         try {
             const formData = new FormData();
 
+            // Validação de governança (Lei 14.133): Exigir justificativa ao alterar campos sensíveis
+            if (hasSensitiveChanges) {
+                if (!justificativa || justificativa.trim().length < 10) {
+                    toast.error("A alteração dos campos sensíveis exige justificativa formal com no mínimo 10 caracteres.", { id: toastId });
+                    setIsSubmitting(false);
+                    return;
+                }
+                formData.append("justificativa", justificativa.trim());
+            }
+
+            const SENSITIVE_KEYS: (keyof ContractFormData)[] = [
+                'nr_contrato', 'objeto', 'contratado_id', 'modalidade_id',
+                'data_inicio', 'data_fim', 'valor_anual', 'valor_global'
+            ];
+
             // Adiciona apenas os campos que foram modificados
             Object.keys(data).forEach(keyStr => {
                 const key = keyStr as keyof ContractFormData;
                 if (dirtyFields[key]) {
+                    // Se os campos sensíveis estiverem bloqueados por regras da Lei 14.133, não envia
+                    if (isCamposSensiveisBloqueados && SENSITIVE_KEYS.includes(key)) {
+                        return;
+                    }
+
                     const value = data[key];
                     if (value !== undefined && value !== null && value !== '') {
                         if (['valor_anual', 'valor_global'].includes(key)) {
@@ -465,6 +593,7 @@ export function EditarContrato() {
             // Recarrega detalhes e arquivos para refletir alterações antes de sair
             try {
                 const refreshed = await getContratoDetalhado(Number(id));
+                setRawContract(refreshed);
                 // Atualiza o formulário com os dados retornados pelo backend
                 const refreshedFormatted: Partial<ContractFormData> = {
                     nr_contrato: refreshed.nr_contrato ?? '',
@@ -670,18 +799,48 @@ export function EditarContrato() {
                 <input {...register("modalidade_id")} type="hidden" />
                 <input {...register("status_id")} type="hidden" />
 
-                {/* --- CAMPOS DO FORMULÁRIO (inalterados) --- */}
+                {/* Banner de bloqueio de campos sensíveis (Lei 14.133) */}
+                {isCamposSensiveisBloqueados && (
+                    <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm">
+                        <div className="flex items-start">
+                            <div className="flex-shrink-0 mt-0.5">
+                                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                            </div>
+                            <div className="ml-3">
+                                <h3 className="text-sm font-semibold text-amber-900">
+                                    Regras de Governança Contratual (Lei nº 14.133/2021)
+                                </h3>
+                                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                                    Os campos sensíveis deste contrato (número, objeto, contratado, modalidade, vigência e valores) estão <strong>bloqueados para edição direta</strong> porque o contrato {motivoBloqueio}.
+                                </p>
+                                <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+                                    Conforme a legislação vigente, quaisquer alterações de prazo, valor ou objeto devem ser formalizadas através de <strong>Termo Aditivo</strong>. Os campos operacionais (fiscais, gestores, processos e anexos) permanecem liberados para alteração.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- CAMPOS DO FORMULÁRIO --- */}
                 <div className="col-span-1">
-                    <label className="font-medium">Número do contrato</label>
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Número do contrato</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
                     <input 
                         type="text" 
+                        disabled={isCamposSensiveisBloqueados}
                         placeholder="Ex: 99/2025" 
                         {...register("nr_contrato", {
                             onChange: (e) => {
                                 e.target.value = maskNumeroContrato(e.target.value);
                             }
                         })} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                        className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
                     />
                     {errors.nr_contrato && <p className="text-red-500 text-sm">{errors.nr_contrato.message}</p>}
                 </div>
@@ -711,8 +870,19 @@ export function EditarContrato() {
                     <input type="date" {...register("garantia")} className="mt-1 border rounded-lg p-2 w-full" />
                 </div>
                 <div className="col-span-1 md:col-span-2 lg:col-span-4">
-                    <label className="font-medium">Objeto</label>
-                    <textarea {...register("objeto")} className="mt-1 border rounded-lg p-2 w-full h-20" />
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Objeto</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
+                    <textarea 
+                        disabled={isCamposSensiveisBloqueados}
+                        {...register("objeto")} 
+                        className={`mt-1 border rounded-lg p-2 w-full h-20 ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
+                    />
                     {errors.objeto && <p className="text-red-500 text-sm">{errors.objeto.message}</p>}
                 </div>
 
@@ -736,14 +906,14 @@ export function EditarContrato() {
                                     const file = e.target.files?.[0];
                                     if (file) {
                                         if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-                                            toast.error("Tipo de arquivo não permitido");
-                                            e.target.value = '';
-                                            return;
+                                             toast.error("Tipo de arquivo não permitido");
+                                             e.target.value = '';
+                                             return;
                                         }
                                         if (file.size > MAX_FILE_SIZE) {
-                                            toast.error("Arquivo muito grande (máx. 10MB)");
-                                            e.target.value = '';
-                                            return;
+                                             toast.error("Arquivo muito grande (máx. 10MB)");
+                                             e.target.value = '';
+                                             return;
                                         }
                                         setSelectedAtaFile(file);
                                         toast.success(`Arquivo "${file.name}" selecionado`);
@@ -765,12 +935,20 @@ export function EditarContrato() {
                 </div>
 
                 <div className="md:col-span-1 lg:col-span-2">
-                    <label className="font-medium">Contratado *</label>
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Contratado *</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
                     <div className="mt-1">
                         <SearchableSelect
                             options={contratados}
                             value={selectedContratado}
                             selectedLabel={selectedContratadoNome}
+                            disabled={isCamposSensiveisBloqueados}
                             onSearch={handleSearchContratados}
                             onValueChange={(value, label) => {
                                 setSelectedContratado(value);
@@ -876,21 +1054,53 @@ export function EditarContrato() {
                 </div>
 
                 <div>
-                    <label className="font-medium">Data Início</label>
-                    <input type="date" {...register("data_inicio")} className="mt-1 border rounded-lg p-2 w-full" />
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Data Início</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
+                    <input 
+                        type="date" 
+                        disabled={isCamposSensiveisBloqueados}
+                        {...register("data_inicio")} 
+                        className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
+                    />
                     {errors.data_inicio && <p className="text-red-500 text-sm">{errors.data_inicio.message}</p>}
                 </div>
                 <div>
-                    <label className="font-medium">Data Fim</label>
-                    <input type="date" {...register("data_fim")} className="mt-1 border rounded-lg p-2 w-full" />
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Data Fim</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
+                    <input 
+                        type="date" 
+                        disabled={isCamposSensiveisBloqueados}
+                        {...register("data_fim")} 
+                        className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
+                    />
                     {errors.data_fim && <p className="text-red-500 text-sm">{errors.data_fim.message}</p>}
                 </div>
                 <div>
-                    <label className="font-medium">Modalidade *</label>
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Modalidade *</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
                     <div className="mt-1">
                         <SearchableSelect
                             options={modalidades}
                             value={selectedModalidade}
+                            disabled={isCamposSensiveisBloqueados}
                             onValueChange={(value) => {
                                 setSelectedModalidade(value);
                                 setValue("modalidade_id", value, { shouldDirty: true });
@@ -928,30 +1138,46 @@ export function EditarContrato() {
                     {errors.status_id && <p className="text-red-500 text-sm">{errors.status_id.message}</p>}
                 </div>
                 <div>
-                    <label className="font-medium">Valor Anual</label>
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Valor Anual</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
                     <input 
                         type="text" 
+                        disabled={isCamposSensiveisBloqueados}
                         placeholder="0,00" 
                         {...register("valor_anual", {
                             onChange: (e) => {
                                 e.target.value = maskMoney(e.target.value);
                             }
                         })} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                        className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
                     />
                     {errors.valor_anual && <p className="text-red-500 text-sm">{errors.valor_anual.message}</p>}
                 </div>
                 <div>
-                    <label className="font-medium">Valor Global</label>
+                    <div className="flex items-center justify-between">
+                        <label className="font-medium">Valor Global</label>
+                        {isCamposSensiveisBloqueados && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+                                <Lock size={10} /> Bloqueado
+                            </span>
+                        )}
+                    </div>
                     <input 
                         type="text" 
+                        disabled={isCamposSensiveisBloqueados}
                         placeholder="0,00" 
                         {...register("valor_global", {
                             onChange: (e) => {
                                 e.target.value = maskMoney(e.target.value);
                             }
                         })} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                        className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
                     />
                     {errors.valor_global && <p className="text-red-500 text-sm">{errors.valor_global.message}</p>}
                 </div>
@@ -976,6 +1202,34 @@ export function EditarContrato() {
                     </div>
                     <input type="hidden" {...register("termos_contratuais")} />
                 </div>
+
+                {/* Seção de Justificativa para Edição de Campos Sensíveis */}
+                {hasSensitiveChanges && !isCamposSensiveisBloqueados && (
+                    <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-blue-50/70 border border-blue-200 rounded-lg p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
+                                Justificativa da Alteração dos Campos Sensíveis <span className="text-red-500">*</span>
+                            </label>
+                            <span className="text-xs text-blue-600">
+                                {justificativa.trim().length} caracteres (mínimo 10)
+                            </span>
+                        </div>
+                        <p className="text-xs text-blue-700 leading-relaxed">
+                            Conforme os requisitos de governança e controle (Lei nº 14.133/2021), a alteração de dados essenciais do contrato exige justificativa detalhada e formal para registro em auditoria.
+                        </p>
+                        <textarea
+                            value={justificativa}
+                            onChange={(e) => setJustificativa(e.target.value)}
+                            placeholder="Descreva detalhadamente o motivo da alteração dos campos sensíveis (ex: correção material de valor conforme publicação no DOE...)"
+                            className="w-full border border-blue-300 rounded-lg p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 h-24"
+                        />
+                        {justificativa.length > 0 && justificativa.trim().length < 10 && (
+                            <p className="text-xs text-red-600 font-medium">
+                                A justificativa deve conter pelo menos 10 caracteres. Faltam {10 - justificativa.trim().length}.
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {/* --- GERENCIAMENTO DE ARQUIVOS (atualizado) --- */}
                 <div className="lg:col-span-4">
