@@ -1181,23 +1181,45 @@ function validarCamposAditivo(
     ];
     for (const [nomeCampo, valor] of camposData) {
         if (valor && !isDataValida(valor)) {
-            return `${nomeCampo} inválida. Use o formato DD/MM/AAAA com um ano de 4 dígitos.`;
+            return `${nomeCampo} inválida. Use o formato AAAA-MM-DD com um ano de 4 dígitos.`;
         }
+    }
+
+    if (dados.data_publicacao && dados.data_assinatura && dados.data_publicacao < dados.data_assinatura) {
+        return "A Data de Publicação não pode ser anterior à Data de Assinatura.";
     }
 
     if (dados.tipo === "Prazo" || dados.tipo === "Misto") {
         if (!dados.nova_data_fim) {
             return "Preencha: Nova Data Fim.";
         }
-        if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim < dados.data_inicio) {
-            return "Nova Data Fim não pode ser anterior à Nova Data Início.";
+        if (dados.data_inicio && dados.nova_data_fim && dados.nova_data_fim <= dados.data_inicio) {
+            return "Nova Data Fim deve ser posterior à Nova Data de Início.";
         }
         if (contrato) {
+            if (contrato.data_fim && dados.data_assinatura && dados.data_assinatura > contrato.data_fim) {
+                return `A formalização da prorrogação deve ocorrer durante a vigência do contrato (Art. 132 da Lei 14.133/2021 e Súmula 282 do TCU). A vigência atual expirou em ${contrato.data_fim}.`;
+            }
             const origInicio = (contrato as any).data_inicio_original ?? (contrato as any).data_inicio;
             const origFim = (contrato as any).data_fim_original ?? contrato.data_fim;
             const adInicio = dados.data_inicio || origInicio;
+
+            if (origInicio && dados.data_inicio && dados.data_inicio < origInicio) {
+                return `A data de início do aditivo não pode ser anterior à data de início original do contrato (${origInicio}).`;
+            }
+            if (contrato.data_fim && dados.nova_data_fim <= contrato.data_fim) {
+                return `Para aditivos de ${dados.tipo}, a Nova Data Fim deve ser estritamente posterior à vigência atual do contrato (${contrato.data_fim}).`;
+            }
             if (origInicio && origFim && adInicio === origInicio && dados.nova_data_fim === origFim) {
                 return "O termo aditivo de vigência não pode ter as mesmas datas de início e fim da vigência original do contrato.";
+            }
+            if (origInicio && dados.nova_data_fim) {
+                const ini = new Date(origInicio);
+                const fim = new Date(dados.nova_data_fim);
+                const diffAnos = (fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+                if (diffAnos > 10) {
+                    return "A nova vigência ultrapassa o limite máximo decenal de 10 anos permitido pelos Arts. 106 e 107 da Lei 14.133/2021.";
+                }
             }
         }
     }

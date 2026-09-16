@@ -46,7 +46,37 @@ const contractSchema = z.object({
     garantia: z.string().optional(),
     portaria_fiscal: z.string().optional(),
     nr_adesao_ata: z.string().optional(),
-});
+}).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        return data.data_fim >= data.data_inicio;
+    },
+    {
+        message: "A data de fim da vigência não pode ser anterior à data de início",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        const ini = new Date(data.data_inicio);
+        const fim = new Date(data.data_fim);
+        const diffAnos = (fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        return diffAnos <= 10;
+    },
+    {
+        message: "A vigência contratual inicial não pode ser superior a 10 anos (Arts. 105, 106 e 110 da Lei 14.133/2021)",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_doe || !data.data_fim) return true;
+        return data.data_doe <= data.data_fim;
+    },
+    {
+        message: "A data de publicação no DOE não pode ser posterior à data de término do contrato",
+        path: ["data_doe"],
+    }
+);
 
 type ContractFormData = z.infer<typeof contractSchema>;
 
