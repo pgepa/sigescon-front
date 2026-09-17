@@ -17,6 +17,7 @@ type UserData = {
   id: number;
   nome: string;
   email: string;
+  matricula?: string;
   perfil_ativo: {
     id: number;
     nome: "Administrador" | "Gestor" | "Fiscal";
@@ -130,6 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           id: contexto.usuario_id,
           nome: userInfo.nome,
           email: userInfo.email,
+          matricula: (userInfo as any)?.matricula,
           perfil_ativo: {
             id: contexto.perfil_ativo_id,
             nome: contexto.perfil_ativo_nome as "Administrador" | "Gestor" | "Fiscal"
@@ -217,6 +219,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           id: loginResponse.contexto_sessao.usuario_id,
           nome: userInfo.nome,
           email: userInfo.email,
+          matricula: (userInfo as any)?.matricula,
           perfil_ativo: {
             id: loginResponse.contexto_sessao.perfil_ativo_id,
             nome: loginResponse.contexto_sessao.perfil_ativo_nome as "Administrador" | "Gestor" | "Fiscal"
