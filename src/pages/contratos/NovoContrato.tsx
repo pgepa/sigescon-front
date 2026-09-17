@@ -18,7 +18,7 @@ const contractSchema = z.object({
     data_fim: z.string().min(1, "Data de fim é obrigatória"),
     contratado_id: z.string().min(1, "Contratado é obrigatório"),
     modalidade_id: z.string().min(1, "Modalidade é obrigatória"),
-    status_id: z.string().min(1, "Status é obrigatório"),
+    status_id: z.string().optional(),
     gestor_id: z.string().optional(),
     fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
@@ -411,7 +411,9 @@ export function NovoContrato() {
 
                 setContratados(contratadosArray.filter((item: any) => item.ativo !== false));
                 setModalidades(modalidadesArray.filter((item: any) => item.ativo !== false));
-                setStatusList(statusArray.filter((item: any) => item.ativo !== false));
+                // O status Ativo e Encerrado são geridos 100% pelo sistema por vigência.
+                // No cadastro, ficam disponíveis para seleção apenas Suspenso e Cancelado.
+                setStatusList(statusArray.filter((item: any) => item.ativo !== false && ['Suspenso', 'Cancelado'].includes(item.nome)));
                 setPerfis(perfisArray);
 
                 // Carregar usuários filtrados por perfil com limite maior
@@ -1249,7 +1251,7 @@ export function NovoContrato() {
 
                 {/* Status */}
                 <div>
-                    <label className="font-medium">Status *</label>
+                    <label className="font-medium">Status <span className="text-xs text-gray-500 font-normal">(Opcional)</span></label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={statusList}
@@ -1258,9 +1260,12 @@ export function NovoContrato() {
                                 setSelectedStatus(value);
                                 setValue("status_id", value);
                             }}
-                            placeholder="Selecione um status"
+                            placeholder="Automático pelo sistema (conforme vigência)"
                         />
                     </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                        Se não selecionado, o sistema definirá automaticamente como <strong>Ativo</strong> ou <strong>Encerrado</strong> conforme a vigência.
+                    </p>
                     {errors.status_id && <p className="text-red-500 text-sm">{errors.status_id.message}</p>}
                 </div>
 

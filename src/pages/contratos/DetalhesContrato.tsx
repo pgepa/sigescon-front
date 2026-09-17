@@ -1102,21 +1102,24 @@ export default function DetalhesContrato() {
                             const expiradoFallback = ad.nova_data_fim ? new Date(ad.nova_data_fim + "T00:00:00") < hoje : false;
                             const inativoFallback = ad.ativo === false;
                             const inativo = ad.status ? ad.status === "Inativo" : inativoFallback;
+                            const incorporado = ad.status === "Incorporado";
                             const aguardando = ad.status === "Aguardando Vigência";
-                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback && !aguardando);
-                            const expirado = ad.status ? ad.status === "Vencido" : (expiradoFallback && !inativo && !aguardando);
-                            const statusLabel = ad.status ?? (inativo ? "Inativo" : aguardando ? "Aguardando Vigência" : expirado ? "Vencido" : "Ativo");
+                            const vigente = ad.status ? ad.status === "Ativo" : (!expiradoFallback && !inativoFallback && !aguardando && !incorporado);
+                            const expirado = ad.status ? ad.status === "Vencido" : (expiradoFallback && !inativo && !aguardando && !incorporado);
+                            const statusLabel = ad.status ?? (inativo ? "Inativo" : incorporado ? "Incorporado" : aguardando ? "Aguardando Vigência" : expirado ? "Vencido" : "Ativo");
                             const statusClasse = inativo
                               ? "bg-gray-200 text-gray-600"
-                              : aguardando
-                                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : expirado
-                                  ? "bg-amber-100 text-amber-700"
-                                  : "bg-green-100 text-green-700";
+                              : incorporado
+                                ? "bg-green-100 text-green-700"
+                                : aguardando
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : expirado
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-green-100 text-green-700";
 
                             return (
                               <React.Fragment key={ad.id}>
-                                <tr className={(vigente || aguardando) ? "hover:bg-gray-50" : "bg-gray-50/50 opacity-75"}>
+                                <tr className={(vigente || incorporado || aguardando) ? "hover:bg-gray-50" : "bg-gray-50/50 opacity-75"}>
                                   <td className="px-3 py-2 font-semibold text-indigo-700">{idx + 1}º</td>
                                   <td className="px-3 py-2 whitespace-nowrap">
                                     <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${statusClasse}`}>
@@ -1124,7 +1127,7 @@ export default function DetalhesContrato() {
                                     </span>
                                   </td>
                                   <td className="px-3 py-2">
-                                    <Badge className={`text-xs px-1.5 py-0 border ${(vigente || aguardando) ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
+                                    <Badge className={`text-xs px-1.5 py-0 border ${(vigente || incorporado || aguardando) ? "bg-indigo-100 text-indigo-800 border-indigo-200" : "bg-gray-100 text-gray-500 border-gray-200"}`}>
                                       {ad.tipo}
                                     </Badge>
                                   </td>

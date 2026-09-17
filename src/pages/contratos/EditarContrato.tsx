@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Save, SquareX, Upload, Trash2, ChevronDown, Search, X, AlertTriangle, Lock } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { useAuth } from "@/contexts/AuthContext";
 
 // Constantes para arquivo (igual ao NovoContrato)
 const ALLOWED_FILE_TYPES = [
@@ -255,6 +256,7 @@ function SearchableSelect({ options, value, onValueChange, placeholder, onSearch
 export function EditarContrato() {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
 
     // Estados para arquivos
     const [existingFiles, setExistingFiles] = useState<{ id: number; nome_arquivo: string; data_upload?: string }[]>([]);
@@ -294,6 +296,13 @@ export function EditarContrato() {
 
     const [rawContract, setRawContract] = useState<any>(null);
     const [justificativa, setJustificativa] = useState("");
+    const [matricula, setMatricula] = useState("");
+
+    useEffect(() => {
+        if (user?.matricula && !matricula) {
+            setMatricula(user.matricula);
+        }
+    }, [user]);
 
     const {
         register,
@@ -310,13 +319,17 @@ export function EditarContrato() {
     const totalAditivos = rawContract?.total_aditivos ?? 0;
     const hasAditivos = totalAditivos > 0;
     const isEncerrado = rawContract?.status_nome === 'Encerrado';
+    const isCancelado = rawContract?.status_nome === 'Cancelado';
+    const isSuspenso = rawContract?.status_nome === 'Suspenso';
     const isVigenciaOriginalExpirada = Boolean(
         rawContract?.data_fim_original &&
         new Date(rawContract.data_fim_original + "T00:00:00").getTime() < new Date(new Date().setHours(0, 0, 0, 0)).getTime()
     );
-    const isCamposSensiveisBloqueados = Boolean(rawContract && (hasAditivos || isEncerrado || isVigenciaOriginalExpirada));
+    const isCamposSensiveisBloqueados = Boolean(rawContract && (hasAditivos || isEncerrado || isVigenciaOriginalExpirada || isCancelado));
 
-    const motivoBloqueio = hasAditivos
+    const motivoBloqueio = isCancelado
+        ? 'está com status "Cancelado" (imutável)'
+        : hasAditivos
         ? `possui ${totalAditivos} termo(s) aditivo(s) cadastrado(s)`
         : isEncerrado
         ? 'está com status "Encerrado"'
@@ -372,6 +385,13 @@ export function EditarContrato() {
         watchedValorAnual,
         watchedValorGlobal,
     ]);
+
+    // Detectar se houve alteração de status
+    const hasStatusChange = Boolean(
+        rawContract &&
+        selectedStatus &&
+        String(rawContract.status_id) !== String(selectedStatus)
+    );
 
     useEffect(() => {
         async function loadContractData() {
@@ -512,14 +532,22 @@ export function EditarContrato() {
         try {
             const formData = new FormData();
 
-            // Validação de governança (Lei 14.133): Exigir justificativa ao alterar campos sensíveis
-            if (hasSensitiveChanges) {
+            // Validação de governança (Lei 14.133): Exigir justificativa ao alterar campos sensíveis ou mudar status
+            if (hasSensitiveChanges || hasStatusChange) {
                 if (!justificativa || justificativa.trim().length < 10) {
-                    toast.error("A alteração dos campos sensíveis exige justificativa formal com no mínimo 10 caracteres.", { id: toastId });
+                    toast.error("A alteração de status ou de campos sensíveis exige justificativa formal com no mínimo 10 caracteres.", { id: toastId });
+                    setIsSubmitting(false);
+                    return;
+                }
+                if (hasStatusChange && (!matricula || !matricula.trim())) {
+                    toast.error("A alteração de status exige a informação da matrícula do responsável para fins de auditoria.", { id: toastId });
                     setIsSubmitting(false);
                     return;
                 }
                 formData.append("justificativa", justificativa.trim());
+                if (matricula && matricula.trim()) {
+                    formData.append("matricula", matricula.trim());
+                }
             }
 
             const SENSITIVE_KEYS: (keyof ContractFormData)[] = [
@@ -1115,26 +1143,56 @@ export function EditarContrato() {
                     <div className="mt-1">
                         <select
                             value={selectedStatus}
+                            disabled={isCancelado}
                             onChange={(e) => {
                                 const val = e.target.value;
                                 setSelectedStatus(val);
                                 setValue("status_id", val, { shouldDirty: true });
                             }}
-                            className="w-full border rounded-lg p-2.5 text-sm bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 focus:outline-none"
+                            className={`w-full border rounded-lg p-2.5 text-sm bg-white border-gray-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 focus:outline-none ${isCancelado ? 'bg-gray-100 cursor-not-allowed opacity-75' : ''}`}
                         >
-                            {selectedStatus === "1" && (
-                                <option value="1">Ativo (Controlado pelo sistema)</option>
+                            {/* Se o contrato for Cancelado: imutável */}
+                            {isCancelado && (
+                                <option value="4">Cancelado (Imutável)</option>
                             )}
-                            {selectedStatus === "3" && (
-                                <option value="3">Encerrado (Controlado pelo sistema)</option>
+
+                            {/* Se for Ativo: usuário só pode suspender ou cancelar */}
+                            {!isCancelado && rawContract?.status_nome === "Ativo" && (
+                                <>
+                                    <option value="1">Ativo (Controlado pelo sistema)</option>
+                                    <option value="2">Suspenso</option>
+                                    <option value="4">Cancelado</option>
+                                </>
                             )}
-                            <option value="2">Suspenso</option>
-                            <option value="4">Cancelado</option>
-                            {(selectedStatus === "2" || selectedStatus === "4") && (
-                                <option value="1">Reativar / Ativo</option>
+
+                            {/* Se for Encerrado: usuário só pode cancelar */}
+                            {!isCancelado && rawContract?.status_nome === "Encerrado" && (
+                                <>
+                                    <option value="3">Encerrado (Controlado pelo sistema)</option>
+                                    <option value="4">Cancelado</option>
+                                </>
+                            )}
+
+                            {/* Se for Suspenso: pode reativar ou cancelar */}
+                            {!isCancelado && rawContract?.status_nome === "Suspenso" && (
+                                <>
+                                    <option value="2">Suspenso</option>
+                                    <option value="1">Reativar / Ativo</option>
+                                    <option value="4">Cancelado</option>
+                                </>
                             )}
                         </select>
                     </div>
+                    {isCancelado && (
+                        <p className="text-[11px] text-red-600 mt-1 font-medium">
+                            Contrato cancelado não pode ser reativado ou modificado.
+                        </p>
+                    )}
+                    {!isCancelado && isSuspenso && selectedStatus === "1" && (
+                        <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                            A reativação do contrato suspenso exige justificativa formal.
+                        </p>
+                    )}
                     {errors.status_id && <p className="text-red-500 text-sm">{errors.status_id.message}</p>}
                 </div>
                 <div>
@@ -1203,26 +1261,47 @@ export function EditarContrato() {
                     <input type="hidden" {...register("termos_contratuais")} />
                 </div>
 
-                {/* Seção de Justificativa para Edição de Campos Sensíveis */}
-                {hasSensitiveChanges && !isCamposSensiveisBloqueados && (
-                    <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-blue-50/70 border border-blue-200 rounded-lg p-4 space-y-2">
+                {/* Seção de Justificativa para Edição de Campos Sensíveis ou Mudança de Status */}
+                {((hasSensitiveChanges && !isCamposSensiveisBloqueados) || (hasStatusChange && !isCancelado)) && (
+                    <div className="col-span-1 md:col-span-2 lg:col-span-4 bg-blue-50/70 border border-blue-200 rounded-lg p-4 space-y-3">
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-semibold text-blue-900 flex items-center gap-1.5">
-                                Justificativa da Alteração dos Campos Sensíveis <span className="text-red-500">*</span>
+                                Justificativa Formal da Alteração <span className="text-red-500">*</span>
                             </label>
                             <span className="text-xs text-blue-600">
                                 {justificativa.trim().length} caracteres (mínimo 10)
                             </span>
                         </div>
                         <p className="text-xs text-blue-700 leading-relaxed">
-                            Conforme os requisitos de governança e controle (Lei nº 14.133/2021), a alteração de dados essenciais do contrato exige justificativa detalhada e formal para registro em auditoria.
+                            Conforme os requisitos de governança e controle (Lei nº 14.133/2021), a alteração do status (suspensão, cancelamento ou reativação) ou de dados essenciais do contrato exige justificativa detalhada e formal para registro em auditoria.
                         </p>
-                        <textarea
-                            value={justificativa}
-                            onChange={(e) => setJustificativa(e.target.value)}
-                            placeholder="Descreva detalhadamente o motivo da alteração dos campos sensíveis (ex: correção material de valor conforme publicação no DOE...)"
-                            className="w-full border border-blue-300 rounded-lg p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 h-24"
-                        />
+
+                        {hasStatusChange && (
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-blue-900 flex items-center gap-1">
+                                    Matrícula do Responsável pela Alteração <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={matricula}
+                                    onChange={(e) => setMatricula(e.target.value)}
+                                    placeholder="Informe sua matrícula funcional (ex: 123456-7)"
+                                    className="w-full md:w-1/2 border border-blue-300 rounded-md p-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-1">
+                            <label className="text-xs font-semibold text-blue-900">
+                                Motivação Detalhada <span className="text-red-500">*</span>
+                            </label>
+                            <textarea
+                                value={justificativa}
+                                onChange={(e) => setJustificativa(e.target.value)}
+                                placeholder="Descreva detalhadamente o motivo da alteração (ex: suspensão por ordem de paralisação PAE nº..., reativação com reinício dos serviços, cancelamento rescisório...)"
+                                className="w-full border border-blue-300 rounded-lg p-3 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 h-24"
+                            />
+                        </div>
                         {justificativa.length > 0 && justificativa.trim().length < 10 && (
                             <p className="text-xs text-red-600 font-medium">
                                 A justificativa deve conter pelo menos 10 caracteres. Faltam {10 - justificativa.trim().length}.
