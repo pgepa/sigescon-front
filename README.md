@@ -27,9 +27,19 @@ O **SIGESCON** (Sistema de Gestão de Contratos) é uma aplicação moderna dese
     - **Linha 2**: Campos específicos da natureza (`Nova Data Início *`, `Nova Data Fim *`, `Valor Acréscimo (R$) *` e `Valor Supressão (R$) *`).
     - **Linha 3**: Upload do arquivo do aditivo e campo de descrição automática/manual.
   - Ações completas por aditivo: `Novo Aditivo`, `Editar`, `Inativar` (soft delete com confirmação), `Excluir definitivamente` (hard delete com confirmação), `Upload` e `Download` do arquivo anexo.
-  - Suporte visual aos status `Aguardando Vigência` (efeito prospectivo), `Ativo`, `Vencido` e `Inativo`.
-- **Relatório de Termos Aditivos**: Tela dedicada para busca avançada, filtros por natureza, status (`Ativo`, `Aguardando Vigência`, `Inativo`, `Vencido`) e contrato.
-- **Navegação Fluida de Contratos**: Ao salvar ou cancelar a edição de um contrato (`/contratos/editar/:id`), o usuário é redirecionado diretamente para os detalhes do próprio contrato (`/contratos/:id`).
+  - Suporte visual aos status `Aguardando Vigência` (prospectivo), `Ativo`, `Incorporado` (para aditivos de valor/outros vigentes), `Vencido` e `Inativo` (aditivo de prazo sucedido).
+- **Relatório de Termos Aditivos**: Tela dedicada para busca avançada, filtros por natureza, status (`Ativo`, `Aguardando Vigência`, `Incorporado`, `Inativo`, `Vencido`) e contrato.
+- **Navegação Fluida e Governança de Status e Edição de Contratos**:
+  - **Criação de Contratos (`/contratos/novo`)**: Campo de status opcional restrito às opções `Suspenso` e `Cancelado`. Se não informado, o status é calculado automaticamente pelo sistema conforme a vigência (`Ativo` se `data_fim >= hoje`, caso contrário `Encerrado`).
+  - **Edição de Contratos (`/contratos/editar/:id`)**:
+    - Ao salvar ou cancelar a edição, o usuário é redirecionado diretamente para os detalhes do próprio contrato (`/contratos/:id`).
+    - Transição de status permitida estritamente para `Suspenso` ou `Cancelado`, ou reativação de `Suspenso` para `Ativo`, todas condicionadas à inserção obrigatória de justificativa formal (mínimo de 10 caracteres).
+    - Bloqueio integral de edição para contratos com status `Cancelado`.
+  - **Governança e Lei nº 14.133/2021**:
+    - Banner informativo no topo da tela esclarecendo as regras legais para alteração contratual.
+    - Bloqueio com badge e desabilitação de campos sensíveis (número, objeto, contratado, modalidade, vigência e valores) caso o contrato possua termos aditivos cadastrados, esteja encerrado ou tenha sua vigência original expirada.
+    - Exigência de campo formal de **Justificativa da Alteração** (mínimo de 10 caracteres) ao modificar campos essenciais em contratos elegíveis.
+    - Edição contínua e irrestrita mantida para campos de gestão e apostilamento (fiscais, gestores, portaria, processos e documentos).
 - **Sistema de Múltiplos Perfis**: Suporte a múltiplos papéis por usuário com alternância instantânea de contexto (Admin, Gestor, Fiscal) diretamente no cabeçalho.
 - **Relatórios Fiscais e Pendências**: Acompanhamento de prazos, notificações automáticas e fluxo de análise/aprovação de relatórios.
 - **Administração de Entidades Auxiliares**: Gerenciamento de Fornecedores (Contratados), Modalidades, Status e Usuários.

@@ -74,10 +74,33 @@ export function StatusBadge({ status, size = "md", showIcon = true, className }:
           label: 'Ativo'
         };
 
+      case 'incorporado':
+        return {
+          color: 'bg-green-100 text-green-800 border-green-200',
+          icon: <IconCheck className="w-3 h-3" />,
+          label: 'Incorporado'
+        };
+
+      case 'suspenso':
+      case 'suspensa':
+        return {
+          color: 'bg-amber-100 text-amber-800 border-amber-200',
+          icon: <IconAlertTriangle className="w-3 h-3" />,
+          label: 'Suspenso'
+        };
+
+      case 'encerrado':
+      case 'encerrada':
+        return {
+          color: 'bg-gray-200 text-gray-700 border-gray-300',
+          icon: <IconClock className="w-3 h-3" />,
+          label: 'Encerrado'
+        };
+
       case 'cancelado':
       case 'cancelada':
         return {
-          color: 'bg-gray-100 text-gray-800 border-gray-200',
+          color: 'bg-red-100 text-red-800 border-red-200',
           icon: <IconX className="w-3 h-3" />,
           label: 'Cancelado'
         };

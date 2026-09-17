@@ -18,7 +18,7 @@ const contractSchema = z.object({
     data_fim: z.string().min(1, "Data de fim é obrigatória"),
     contratado_id: z.string().min(1, "Contratado é obrigatório"),
     modalidade_id: z.string().min(1, "Modalidade é obrigatória"),
-    status_id: z.string().min(1, "Status é obrigatório"),
+    status_id: z.string().optional(),
     gestor_id: z.string().optional(),
     fiscal_id: z.string().optional(),
     fiscal_substituto_id: z.string().optional(),
@@ -46,7 +46,37 @@ const contractSchema = z.object({
     garantia: z.string().optional(),
     portaria_fiscal: z.string().optional(),
     nr_adesao_ata: z.string().optional(),
-});
+}).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        return data.data_fim >= data.data_inicio;
+    },
+    {
+        message: "A data de fim da vigência não pode ser anterior à data de início",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_inicio || !data.data_fim) return true;
+        const ini = new Date(data.data_inicio);
+        const fim = new Date(data.data_fim);
+        const diffAnos = (fim.getTime() - ini.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        return diffAnos <= 10;
+    },
+    {
+        message: "A vigência contratual inicial não pode ser superior a 10 anos (Arts. 105, 106 e 110 da Lei 14.133/2021)",
+        path: ["data_fim"],
+    }
+).refine(
+    (data) => {
+        if (!data.data_doe || !data.data_fim) return true;
+        return data.data_doe <= data.data_fim;
+    },
+    {
+        message: "A data de publicação no DOE não pode ser posterior à data de término do contrato",
+        path: ["data_doe"],
+    }
+);
 
 type ContractFormData = z.infer<typeof contractSchema>;
 
@@ -381,7 +411,9 @@ export function NovoContrato() {
 
                 setContratados(contratadosArray.filter((item: any) => item.ativo !== false));
                 setModalidades(modalidadesArray.filter((item: any) => item.ativo !== false));
-                setStatusList(statusArray.filter((item: any) => item.ativo !== false));
+                // O status Ativo e Encerrado são geridos 100% pelo sistema por vigência.
+                // No cadastro, ficam disponíveis para seleção apenas Suspenso e Cancelado.
+                setStatusList(statusArray.filter((item: any) => item.ativo !== false && ['Suspenso', 'Cancelado'].includes(item.nome)));
                 setPerfis(perfisArray);
 
                 // Carregar usuários filtrados por perfil com limite maior
@@ -1219,7 +1251,7 @@ export function NovoContrato() {
 
                 {/* Status */}
                 <div>
-                    <label className="font-medium">Status *</label>
+                    <label className="font-medium">Status <span className="text-xs text-gray-500 font-normal">(Opcional)</span></label>
                     <div className="mt-1">
                         <SearchableSelect
                             options={statusList}
@@ -1228,9 +1260,12 @@ export function NovoContrato() {
                                 setSelectedStatus(value);
                                 setValue("status_id", value);
                             }}
-                            placeholder="Selecione um status"
+                            placeholder="Automático pelo sistema (conforme vigência)"
                         />
                     </div>
+                    <p className="text-[11px] text-gray-500 mt-1">
+                        Se não selecionado, o sistema definirá automaticamente como <strong>Ativo</strong> ou <strong>Encerrado</strong> conforme a vigência.
+                    </p>
                     {errors.status_id && <p className="text-red-500 text-sm">{errors.status_id.message}</p>}
                 </div>
 
