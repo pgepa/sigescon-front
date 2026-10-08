@@ -400,17 +400,23 @@ function ContratosFilters({
 
     // Aplicar filtros da URL automaticamente
     React.useEffect(() => {
-        if (searchParams.get('vencimento_90_dias') === 'true') {
-            console.log('🔗 Aplicando filtro de vencimento 90 dias da URL no ContratosFilters');
-            
+        const vencimentoUrl = ['30', '60', '90'].find(
+            (dias) => searchParams.get(`vencimento_${dias}_dias`) === 'true'
+        );
+
+        if (vencimentoUrl) {
+            console.log(`🔗 Aplicando filtro de vencimento ${vencimentoUrl} dias da URL no ContratosFilters`);
+
             // Atualizar estado dos filtros
             setFilters(prev => ({
                 ...prev,
-                vencimento_90_dias: true
+                vencimento_30_dias: vencimentoUrl === '30',
+                vencimento_60_dias: vencimentoUrl === '60',
+                vencimento_90_dias: vencimentoUrl === '90',
             }));
             
             // Aplicar na tabela
-            table.getColumn('vencimento_90_dias')?.setFilterValue(true);
+            table.getColumn(`vencimento_${vencimentoUrl}_dias`)?.setFilterValue(true);
         }
     }, [searchParams, table]);
 

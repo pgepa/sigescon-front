@@ -5,6 +5,8 @@ import {
     getDashboardAdminCompleto,
     getDashboardAdminPendenciasVencidasCompleto,
     getDashboardAdminContratosProximosVencimento,
+    getContratos,
+    getContratoDetalhado,
     type DashboardAdminCompletoResponse,
     type DashboardAdminPendenciasVencidasResponse,
 } from "@/lib/api";
@@ -45,6 +47,54 @@ function formatValor(valor: number): string {
     if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(1).replace(".", ",")}M`;
     if (valor >= 1_000) return `${(valor / 1_000).toFixed(0)}K`;
     return valor.toFixed(0);
+}
+
+function parseValor(valor: number | string | null | undefined): number {
+    if (typeof valor === "number") return Number.isFinite(valor) ? valor : 0;
+    if (!valor) return 0;
+
+    const normalizado = valor.replace(/R\$\s?/g, "").trim();
+    const numero = normalizado.includes(",")
+        ? Number(normalizado.replace(/\./g, "").replace(",", "."))
+        : Number(normalizado);
+
+    return Number.isFinite(numero) ? numero : 0;
+}
+
+function obterAno(data: string | null | undefined): string | null {
+    if (!data) return null;
+    const match = String(data).match(/(?:^|\/)(\d{4})(?:-|\/|$)/);
+    return match?.[1] ?? null;
+}
+
+async function carregarValorGlobalDoAnoAtual(): Promise<number> {
+    const anoAtual = new Date().getFullYear();
+    const perPage = 100;
+    const primeiraPagina = await getContratos({ page: 1, per_page: perPage });
+    let contratos = primeiraPagina.data;
+
+    if (primeiraPagina.total_pages > 1) {
+        const paginasRestantes = await Promise.all(
+            Array.from({ length: primeiraPagina.total_pages - 1 }, (_, index) =>
+                getContratos({ page: index + 2, per_page: perPage })
+            )
+        );
+        contratos = contratos.concat(...paginasRestantes.map((pagina) => pagina.data));
+    }
+
+    const contratosDetalhados = await Promise.all(
+        contratos.map(async (contrato) => {
+            try {
+                return await getContratoDetalhado(contrato.id);
+            } catch {
+                return contrato;
+            }
+        })
+    );
+
+    return contratosDetalhados
+        .filter((contrato) => obterAno(contrato.data_inicio) === String(anoAtual))
+        .reduce((total, contrato) => total + parseValor(contrato.valor_global), 0);
 }
 
 function buildAlerts(
@@ -172,9 +222,16 @@ export default function AdminDashboard() {
     const [dashboardData, setDashboardData] = useState<DashboardAdminCompletoResponse | null>(null);
     const [pendenciasData, setPendenciasData] = useState<DashboardAdminPendenciasVencidasResponse | null>(null);
     const [vencimentoData, setVencimentoData] = useState<ContratosProximosVencimentoData | null>(null);
+    const [valorTotalContratos, setValorTotalContratos] = useState<number | null>(null);
 
     const load = async () => {
         setLoading(true);
+
+        // Valor total exige buscar o detalhe de cada contrato; carrega em paralelo sem bloquear a tela
+        carregarValorGlobalDoAnoAtual()
+            .then(setValorTotalContratos)
+            .catch(() => setValorTotalContratos(0));
+
         try {
             const [main, pend, venc] = await Promise.allSettled([
                 getDashboardAdminCompleto(),
@@ -214,7 +271,7 @@ export default function AdminDashboard() {
     // KPIs
     const contratosAtivos = contadores?.contratos_ativos ?? 0;
     const aVencer30 = vencimentoData?.estatisticas?.criticos_30_dias ?? contadores?.contratos_vencendo ?? 0;
-    const valorTotal = contadores?.valor_total_contratos ?? 0;
+    const valorTotal = valorTotalContratos;
     const pendenciasFiscais =
         pendenciasData?.total_pendencias_vencidas ??
         contadores?.contratos_com_pendencias ??
@@ -233,11 +290,11 @@ export default function AdminDashboard() {
                     label="A vencer em 30 dias"
                     value={aVencer30}
                     color="orange"
-                    onClick={() => navigate("/contratos?vencimento_90_dias=true")}
+                    onClick={() => navigate("/contratos?vencimento_30_dias=true")}
                 />
                 <StatCard
-                    label="Valor total (R$)"
-                    value={formatValor(valorTotal)}
+                    label={`Valor total ${new Date().getFullYear()} (R$)`}
+                    value={valorTotal === null ? "…" : formatValor(valorTotal)}
                 />
                 <StatCard
                     label="Pendências fiscais"
