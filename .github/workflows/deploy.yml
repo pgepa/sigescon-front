@@ -27,4 +27,4 @@ jobs:
     steps:
       - name: Executar Deploy em Produção
         run: |
-          /home/ginf/scripts/deploy-front.sh ${{ github.ref_name }}
+          /home/ginf/scripts/${{ env.SISTEMA }}/deploy-front.sh ${{ github.ref_name }}
