@@ -910,7 +910,7 @@ export default function DetalhesContrato() {
                         <label className="text-xs font-medium text-gray-600">PAE *</label>
                         <Input
                           className="h-8 text-xs"
-                          placeholder="Ex: 2025/123456"
+                          placeholder="Ex: 2025123456"
                           value={novoAditivo.pae ?? ""}
                           onChange={e => setNovoAditivo({ ...novoAditivo, pae: maskPae(e.target.value) || null })}
                         />
@@ -1326,7 +1326,7 @@ export default function DetalhesContrato() {
                                             <label className="text-xs font-medium text-gray-600">PAE *</label>
                                             <Input
                                               className="h-8 text-xs"
-                                              placeholder="Ex: 2025/123456"
+                                              placeholder="Ex: 2025123456"
                                               value={editandoAditivo[ad.id]?.pae ?? ""}
                                               onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: maskPae(e.target.value) || null } }))}
                                             />
