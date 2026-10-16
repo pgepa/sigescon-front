@@ -45,7 +45,6 @@ import {
     getContratos,
     deleteContrato,
     createPendencia,
-    getContratados,
     getStatus,
     getUsers,
     logout,
@@ -59,7 +58,6 @@ import {
     uploadArquivoAditivo,
     //downloadArquivoContrato,
     downloadArquivoAditivo,
-    type Contratado,
     type Status,
     type User,
     type Perfil,
@@ -400,17 +398,23 @@ function ContratosFilters({
 
     // Aplicar filtros da URL automaticamente
     React.useEffect(() => {
-        if (searchParams.get('vencimento_90_dias') === 'true') {
-            console.log('🔗 Aplicando filtro de vencimento 90 dias da URL no ContratosFilters');
-            
+        const vencimentoUrl = ['30', '60', '90'].find(
+            (dias) => searchParams.get(`vencimento_${dias}_dias`) === 'true'
+        );
+
+        if (vencimentoUrl) {
+            console.log(`🔗 Aplicando filtro de vencimento ${vencimentoUrl} dias da URL no ContratosFilters`);
+
             // Atualizar estado dos filtros
             setFilters(prev => ({
                 ...prev,
-                vencimento_90_dias: true
+                vencimento_30_dias: vencimentoUrl === '30',
+                vencimento_60_dias: vencimentoUrl === '60',
+                vencimento_90_dias: vencimentoUrl === '90',
             }));
             
             // Aplicar na tabela
-            table.getColumn('vencimento_90_dias')?.setFilterValue(true);
+            table.getColumn(`vencimento_${vencimentoUrl}_dias`)?.setFilterValue(true);
         }
     }, [searchParams, table]);
 
@@ -512,7 +516,7 @@ function ContratosFilters({
                         </Label>
                         <Input
                             id="pae"
-                            placeholder="Ex: 2025/123456"
+                            placeholder="Ex: 2025123456"
                             value={filters.pae}
                             onChange={(e) => handleFilterChange("pae", e.target.value)}
                             className="border-blue-300 focus:border-blue-500 focus:ring-blue-500/20 h-9"
@@ -1239,7 +1243,6 @@ export function ContratosDataTable() {
     const { user, perfilAtivo } = useAuth();
     const [searchParams] = useSearchParams();
     const [contratos, setContratos] = React.useState<ContratoList[]>([]);
-    const [contratados, setContratados] = React.useState<Contratado[]>([]);
     const [statusList, setStatusList] = React.useState<Status[]>([]);
     const [usuarios, setUsuarios] = React.useState<User[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
@@ -1486,14 +1489,13 @@ export function ContratosDataTable() {
     }, [navigate]);
 
     React.useEffect(() => {
+        // Ignora respostas de execuções anteriores (ex.: perfil carregado depois do primeiro render),
+        // para que uma resposta atrasada não sobrescreva dados mais recentes.
+        let cancelado = false;
         const fetchInitialData = async () => {
-            setIsLoading(true);
             try {
                 // Carregar dados básicos sempre necessários
-                const promises = [
-                    getContratados({ page: 1, per_page: 100 }),
-                    getStatus(),
-                ];
+                const promises: Promise<unknown>[] = [getStatus()];
 
                 // Adicionar busca de usuários apenas para administradores
                 if (isAdmin) {
@@ -1501,27 +1503,26 @@ export function ContratosDataTable() {
                 }
 
                 const responses = await Promise.all(promises);
-                
+                if (cancelado) return;
+
                 // Processar respostas com tipos corretos
-                const contratadosResponse = responses[0] as any; // ContratadoApiResponse
-                const statusResponse = responses[1] as Status[];
+                const statusResponse = responses[0] as Status[];
 
                 // Filtrar apenas itens ativos (não excluídos)
-                const contratadosArray = contratadosResponse.data || [];
                 const statusArray = statusResponse || [];
 
-                setContratados(contratadosArray.filter((item: any) => item.ativo !== false && item.data_exclusao == null));
                 setStatusList(statusArray.filter((item: any) => item.ativo !== false && item.data_exclusao == null));
 
                 // Definir usuários apenas se for admin
-                if (isAdmin && responses[2]) {
-                    const usuariosResponse = responses[2] as any; // UserApiResponse
+                if (isAdmin && responses[1]) {
+                    const usuariosResponse = responses[1] as any; // UserApiResponse
                     const usuariosArray = usuariosResponse.data || [];
                     setUsuarios(usuariosArray.filter((item: any) => item.ativo !== false && item.data_exclusao == null));
                 } else {
                     setUsuarios([]); // Lista vazia para não-admins
                 }
             } catch (err) {
+                if (cancelado) return;
                 const errorMessage = err instanceof Error ? err.message : "Ocorreu um erro desconhecido.";
 
                 if (errorMessage.includes("401") || errorMessage.includes("não autorizado")) {
@@ -1532,12 +1533,14 @@ export function ContratosDataTable() {
                     return;
                 }
 
-                setError(errorMessage);
+                // Falha nos dados de apoio (filtros) não impede a listagem de contratos
                 toast.error("Erro ao carregar dados de suporte: " + errorMessage);
-                setIsLoading(false); // Finalizar loading em caso de erro
             }
         };
         fetchInitialData();
+        return () => {
+            cancelado = true;
+        };
     }, [handleLogout, isAdmin]);
 
 
@@ -1641,19 +1644,14 @@ export function ContratosDataTable() {
             }
         };
 
-        // Verificar se os dados básicos estão carregados
-        const dadosBasicosCarregados = contratados.length > 0 && statusList.length > 0;
-        // Para admins, também aguardar usuários; para outros perfis, não é necessário
-        const dadosCompletos = isAdmin ? dadosBasicosCarregados && usuarios.length > 0 : dadosBasicosCarregados;
-        
-        console.log('🔍 Verificação dados completos:', { dadosCompletos, dadosBasicosCarregados, isAdmin, usuariosLength: usuarios.length });
-        
-        if (dadosCompletos) {
+        // A listagem não depende dos dados de apoio (contratados/status/usuários), que servem
+        // apenas aos filtros — só aguarda o perfil ativo, que define o filtro do gestor.
+        if (perfilAtivo) {
             fetchContratos();
         } else {
-            console.log('⏳ Aguardando dados completos para buscar contratos');
+            console.log('⏳ Aguardando perfil ativo para buscar contratos');
         }
-    }, [columnFilters, pagination, sorting, contratados, statusList, usuarios, handleLogout, perfilAtivo, user, isFiscal, isGestor, isAdmin]);
+    }, [columnFilters, pagination, sorting, handleLogout, perfilAtivo, user, isFiscal, isGestor, isAdmin]);
 
     const handleContratoDeleted = (deletedId: number) => {
         setContratos((current) => current.filter((c) => c.id !== deletedId));
@@ -2059,7 +2057,7 @@ export function ContratosDataTable() {
                                                                                         <label className="text-xs font-medium text-gray-600">PAE *</label>
                                                                                         <Input
                                                                                             className="h-8 text-xs"
-                                                                                            placeholder="Ex: 2025/123456"
+                                                                                            placeholder="Ex: 2025123456"
                                                                                             value={novoAditivo[c.id]?.pae ?? ""}
                                                                                             onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: maskPae(e.target.value) || null } }))}
                                                                                         />
@@ -2494,7 +2492,7 @@ export function ContratosDataTable() {
                                                                                                                      <label className="text-xs font-medium text-gray-600">PAE *</label>
                                                                                                                      <Input
                                                                                                                          className="h-8 text-xs"
-                                                                                                                         placeholder="Ex: 2025/123456"
+                                                                                                                         placeholder="Ex: 2025123456"
                                                                                                                          value={editandoAditivo[ad.id]?.pae ?? ""}
                                                                                                                          onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: maskPae(e.target.value) || null } }))}
                                                                                                                      />

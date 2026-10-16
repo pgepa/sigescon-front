@@ -1409,7 +1409,7 @@ export type DashboardContadores = {
     usuarios_ativos: number;
     contratos_ativos: number;
     contratos_vencendo: number;
-    valor_total_contratos: number;
+    valor_total_contratos?: number;
     total_pendencias: number;
     total_contratados: number;
     total_fiscalizacoes: number;
