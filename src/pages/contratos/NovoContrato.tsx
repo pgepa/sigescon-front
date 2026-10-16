@@ -114,9 +114,11 @@ interface SearchableSelectProps {
     // presente em `options` (ex.: depois que uma nova busca no servidor substitui a lista
     // e o item escolhido não está entre os resultados retornados).
     selectedLabel?: string;
+    // Exibe a opção "Deixar em branco" para limpar a seleção de campos opcionais.
+    allowClear?: boolean;
 }
 
-function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", onSearch, selectedLabel }: SearchableSelectProps) {
+function SearchableSelect({ options, value, onValueChange, placeholder, canCreateNew = false, onCreateNew, createNewLabel = "Criar novo usuário", maxHeight = "h-80", onSearch, selectedLabel, allowClear = false }: SearchableSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredOptions, setFilteredOptions] = useState(options);
@@ -222,6 +224,20 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
 
                     {/* Options list - altura configurável com scroll */}
                     <div className={`${maxHeight} overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50`}>
+                        {allowClear && value && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onValueChange("", "");
+                                    setIsOpen(false);
+                                    setSearchTerm("");
+                                }}
+                                className="w-full px-4 py-2.5 text-left text-sm italic text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors border-b border-blue-100"
+                            >
+                                <X className="inline h-4 w-4 mr-2" />
+                                Deixar em branco
+                            </button>
+                        )}
                         {filteredOptions.length > 0 ? (
                             <>
                                 {filteredOptions.map((option) => (
@@ -1118,6 +1134,7 @@ export function NovoContrato() {
                                 setValue("gestor_id", value);
                             }}
                             placeholder="Selecione um gestor"
+                            allowClear
                             canCreateNew={true}
                             onCreateNew={handleCreateUser}
                         />
@@ -1137,6 +1154,7 @@ export function NovoContrato() {
                                 setValue("fiscal_id", value);
                             }}
                             placeholder="Selecione um fiscal"
+                            allowClear
                             canCreateNew={true}
                             onCreateNew={handleCreateUser}
                         />
@@ -1156,6 +1174,7 @@ export function NovoContrato() {
                                 setValue("fiscal_substituto_id", value);
                             }}
                             placeholder="Selecione um fiscal substituto"
+                            allowClear
                             canCreateNew={true}
                             onCreateNew={handleCreateUser}
                         />
