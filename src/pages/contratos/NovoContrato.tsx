@@ -224,7 +224,7 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
 
                     {/* Options list - altura configurável com scroll */}
                     <div className={`${maxHeight} overflow-y-auto scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-blue-50`}>
-                        {allowClear && value && (
+                        {allowClear && (
                             <button
                                 type="button"
                                 onClick={() => {
@@ -232,7 +232,11 @@ function SearchableSelect({ options, value, onValueChange, placeholder, canCreat
                                     setIsOpen(false);
                                     setSearchTerm("");
                                 }}
-                                className="w-full px-4 py-2.5 text-left text-sm italic text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-colors border-b border-blue-100"
+                                className={`w-full px-4 py-2.5 text-left text-sm italic transition-colors border-b border-blue-100 ${
+                                    !value
+                                        ? 'bg-blue-100 text-blue-900 font-medium'
+                                        : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                                }`}
                             >
                                 <X className="inline h-4 w-4 mr-2" />
                                 Deixar em branco
