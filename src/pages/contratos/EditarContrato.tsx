@@ -34,7 +34,7 @@ import {
     getModalidades,
     getTermosContratuais,
 } from '@/lib/api';
-import { maskPae, maskNumeroContrato, maskMoney, unmaskMoney } from '@/lib/masks';
+import { maskPae, maskMoney, unmaskMoney } from '@/lib/masks';
 
 // Schema de validação (inalterado)
 const contractSchema = z.object({
@@ -348,7 +348,7 @@ export function EditarContrato() {
     const hasSensitiveChanges = React.useMemo(() => {
         if (!rawContract || isCamposSensiveisBloqueados) return false;
 
-        const origNr = rawContract.nr_contrato ? maskNumeroContrato(rawContract.nr_contrato) : "";
+        const origNr = rawContract.nr_contrato ?? "";
         if (watchedNrContrato && watchedNrContrato !== origNr) return true;
 
         const origObjeto = rawContract.objeto ?? "";
@@ -446,7 +446,7 @@ export function EditarContrato() {
                 
                 // Constrói apenas os campos esperados pelo formulário, com os tipos corretos
                 const formattedData: ContractFormData = {
-                    nr_contrato: contractData.nr_contrato ? maskNumeroContrato(contractData.nr_contrato) : "",
+                    nr_contrato: contractData.nr_contrato ?? "",
                     objeto: contractData.objeto ?? "",
                     data_inicio: contractData.data_inicio ? new Date(contractData.data_inicio).toISOString().split('T')[0] : "",
                     data_fim: contractData.data_fim ? new Date(contractData.data_fim).toISOString().split('T')[0] : "",
@@ -461,7 +461,7 @@ export function EditarContrato() {
                     // Alguns campos podem não estar tipados em Contrato; acessar com cast seguro
                     base_legal: (contractData as any)?.base_legal ?? undefined,
                     termos_contratuais: (contractData as any)?.termos_contratuais ?? undefined,
-                    pae: contractData.pae ? maskPae(contractData.pae) : undefined,
+                    pae: contractData.pae ?? undefined,
                     doe: contractData.doe ?? undefined,
                     data_doe: contractData.data_doe ? new Date(contractData.data_doe).toISOString().split('T')[0] : undefined,
                     garantia: (contractData as any)?.garantia ? new Date((contractData as any).garantia).toISOString().split('T')[0] : undefined,
@@ -862,12 +862,9 @@ export function EditarContrato() {
                     <input 
                         type="text" 
                         disabled={isCamposSensiveisBloqueados}
-                        placeholder="Ex: 99/2025" 
-                        {...register("nr_contrato", {
-                            onChange: (e) => {
-                                e.target.value = maskNumeroContrato(e.target.value);
-                            }
-                        })} 
+                        placeholder="Ex: 992025"
+                        maxLength={50}
+                        {...register("nr_contrato")}
                         className={`mt-1 border rounded-lg p-2 w-full ${isCamposSensiveisBloqueados ? 'bg-gray-100 text-gray-500 cursor-not-allowed border-gray-200' : ''}`} 
                     />
                     {errors.nr_contrato && <p className="text-red-500 text-sm">{errors.nr_contrato.message}</p>}
@@ -876,7 +873,8 @@ export function EditarContrato() {
                     <label className="font-medium">PAE</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: 2025/123456" 
+                        placeholder="Ex: 2025123456" 
+                        maxLength={50}
                         {...register("pae", {
                             onChange: (e) => {
                                 e.target.value = maskPae(e.target.value);

@@ -121,7 +121,7 @@ export function FiscalDashboard() {
                   </span>
                   <Button
                     size="sm"
-                    onClick={() => navigate("/enviar-relatorio")}
+                    onClick={() => navigate("/fiscal/contratos")}
                     className="bg-blue-600 hover:bg-blue-700"
                   >
                     <IconUpload className="w-4 h-4 mr-1" />

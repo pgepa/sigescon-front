@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import React from 'react';
 import { toast } from 'sonner';
 import { getContratados } from '@/lib/api';
-import { maskPae, maskNumeroContrato, maskMoney, unmaskMoney } from '@/lib/masks';
+import { maskPae, maskMoney, unmaskMoney } from '@/lib/masks';
 
 // Schema de validação Zod ajustado para a nova API
 const contractSchema = z.object({
@@ -962,13 +962,10 @@ export function NovoContrato() {
                     <label className="font-medium">Número do contrato *</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: 99/2025" 
-                        {...register("nr_contrato", {
-                            onChange: (e) => {
-                                e.target.value = maskNumeroContrato(e.target.value);
-                            }
-                        })} 
-                        className="mt-1 border rounded-lg p-2 w-full" 
+                        placeholder="Ex: 992025"
+                        maxLength={50}
+                        {...register("nr_contrato")}
+                        className="mt-1 border rounded-lg p-2 w-full"
                     />
                     {errors.nr_contrato && <p className="text-red-500 text-sm">{errors.nr_contrato.message}</p>}
                 </div>
@@ -978,7 +975,8 @@ export function NovoContrato() {
                     <label className="font-medium">PAE</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: 2025/123456" 
+                        placeholder="Ex: 2025123456" 
+                        maxLength={50}
                         {...register("pae", {
                             onChange: (e) => {
                                 e.target.value = maskPae(e.target.value);

@@ -400,17 +400,23 @@ function ContratosFilters({
 
     // Aplicar filtros da URL automaticamente
     React.useEffect(() => {
-        if (searchParams.get('vencimento_90_dias') === 'true') {
-            console.log('🔗 Aplicando filtro de vencimento 90 dias da URL no ContratosFilters');
-            
+        const vencimentoUrl = ['30', '60', '90'].find(
+            (dias) => searchParams.get(`vencimento_${dias}_dias`) === 'true'
+        );
+
+        if (vencimentoUrl) {
+            console.log(`🔗 Aplicando filtro de vencimento ${vencimentoUrl} dias da URL no ContratosFilters`);
+
             // Atualizar estado dos filtros
             setFilters(prev => ({
                 ...prev,
-                vencimento_90_dias: true
+                vencimento_30_dias: vencimentoUrl === '30',
+                vencimento_60_dias: vencimentoUrl === '60',
+                vencimento_90_dias: vencimentoUrl === '90',
             }));
             
             // Aplicar na tabela
-            table.getColumn('vencimento_90_dias')?.setFilterValue(true);
+            table.getColumn(`vencimento_${vencimentoUrl}_dias`)?.setFilterValue(true);
         }
     }, [searchParams, table]);
 
@@ -512,7 +518,7 @@ function ContratosFilters({
                         </Label>
                         <Input
                             id="pae"
-                            placeholder="Ex: 2025/123456"
+                            placeholder="Ex: 2025123456"
                             value={filters.pae}
                             onChange={(e) => handleFilterChange("pae", e.target.value)}
                             className="border-blue-300 focus:border-blue-500 focus:ring-blue-500/20 h-9"
@@ -2059,7 +2065,7 @@ export function ContratosDataTable() {
                                                                                         <label className="text-xs font-medium text-gray-600">PAE *</label>
                                                                                         <Input
                                                                                             className="h-8 text-xs"
-                                                                                            placeholder="Ex: 2025/123456"
+                                                                                            placeholder="Ex: 2025123456"
                                                                                             value={novoAditivo[c.id]?.pae ?? ""}
                                                                                             onChange={e => setNovoAditivo(prev => ({ ...prev, [c.id]: { ...prev[c.id], pae: maskPae(e.target.value) || null } }))}
                                                                                         />
@@ -2494,7 +2500,7 @@ export function ContratosDataTable() {
                                                                                                                      <label className="text-xs font-medium text-gray-600">PAE *</label>
                                                                                                                      <Input
                                                                                                                          className="h-8 text-xs"
-                                                                                                                         placeholder="Ex: 2025/123456"
+                                                                                                                         placeholder="Ex: 2025123456"
                                                                                                                          value={editandoAditivo[ad.id]?.pae ?? ""}
                                                                                                                          onChange={e => setEditandoAditivo(prev => ({ ...prev, [ad.id]: { ...prev[ad.id], pae: maskPae(e.target.value) || null } }))}
                                                                                                                      />
