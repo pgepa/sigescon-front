@@ -873,8 +873,7 @@ export function EditarContrato() {
                     <label className="font-medium">PAE</label>
                     <input 
                         type="text" 
-                        placeholder="Ex: 2025123456" 
-                        maxLength={50}
+                        placeholder="Ex: 2025/2128015"
                         {...register("pae", {
                             onChange: (e) => {
                                 e.target.value = maskPae(e.target.value);

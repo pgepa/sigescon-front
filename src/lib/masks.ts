@@ -4,11 +4,11 @@
 
 /**
  * Máscara para o PAE (Processo Administrativo Eletrônico).
- * Apenas dígitos, sem barra e sem limite de tamanho (ex: 2026123456).
+ * Texto livre, sem restrição de caracteres ou tamanho (ex: 2025/2128015).
  */
 export function maskPae(value: string | null | undefined): string {
   if (!value) return "";
-  return value.replace(/\D/g, "");
+  return value;
 }
 
 /**
