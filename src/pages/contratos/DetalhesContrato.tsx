@@ -602,7 +602,7 @@ export default function DetalhesContrato() {
         <Card>
           <CardContent className="py-4 px-5">
             {/* Linha 1: dados principais */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-x-6 gap-y-3 text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-3 text-sm">
               <div>
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Contratado</p>
                 <p className="font-semibold text-gray-800 mt-0.5">{contrato.contratado_nome || "—"}</p>
@@ -621,6 +621,12 @@ export default function DetalhesContrato() {
                 <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Vigência Atual</p>
                 <p className="font-semibold text-gray-800 mt-0.5">
                   {vigenciaAtual}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Valor Global Inicial</p>
+                <p className="font-semibold text-gray-800 mt-0.5">
+                  {contrato.valor_global_original != null ? formatCurrency(contrato.valor_global_original) : "—"}
                 </p>
               </div>
               <div>
